@@ -195,8 +195,7 @@ class MyApp extends StatelessWidget {
         title: "Simple Live",
         theme: AppStyle.lightTheme.copyWith(colorScheme: lightColorScheme),
         darkTheme: AppStyle.darkTheme.copyWith(colorScheme: darkColorScheme),
-        themeMode:
-            ThemeMode.values[Get.find<AppSettingsController>().themeMode.value],
+        themeMode: ThemeMode.system,
         initialRoute: RoutePath.kIndex,
         getPages: AppPages.routes,
         //国际化

@@ -485,16 +485,6 @@ class LiveRoomPage extends GetView<LiveRoomController> {
                 const Tab(
                   text: "聊天",
                 ),
-                if (controller.site.id == Constant.kBiliBili)
-                  Tab(
-                    child: Obx(
-                      () => Text(
-                        controller.superChats.isNotEmpty
-                            ? "SC(${controller.superChats.length})"
-                            : "SC",
-                      ),
-                    ),
-                  ),
                 const Tab(
                   text: "关注",
                 ),
