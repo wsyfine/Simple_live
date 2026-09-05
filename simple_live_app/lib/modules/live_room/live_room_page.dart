@@ -113,6 +113,13 @@ class LiveRoomPage extends GetView<LiveRoomController> {
               controller.adjustVolume(5);
             } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
               controller.adjustVolume(-5);
+            } else if (event.logicalKey == LogicalKeyboardKey.enter) {
+              // 回车全屏/退出全屏（与双击逻辑一致）
+              if (controller.fullScreenState.value) {
+                controller.exitFull();
+              } else {
+                controller.enterFullScreen();
+              }
             }
           }
         },
