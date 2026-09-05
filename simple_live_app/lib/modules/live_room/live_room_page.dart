@@ -118,6 +118,16 @@ class LiveRoomPage extends GetView<LiveRoomController> {
             }
             return;
           }
+          // 左右键切换关注的直播间（仅首次按下）
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+              controller.switchToPrevLive();
+              return;
+            } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+              controller.switchToNextLive();
+              return;
+            }
+          }
           // 音量加减（支持长按重复）
           if (event is KeyDownEvent || event is KeyRepeatEvent) {
             if (event.logicalKey == LogicalKeyboardKey.arrowUp) {

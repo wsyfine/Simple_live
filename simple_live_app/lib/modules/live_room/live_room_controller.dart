@@ -655,7 +655,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   /// 桌面端音量快捷键调整（上/下方向键，每次5%）
   Timer? _volumeTipTimer;
   DateTime? _lastVolumeAdjustTime;
-  static const _volumeAdjustMinInterval = Duration(milliseconds: 150);
+  static const _volumeAdjustMinInterval = Duration(milliseconds: 100);
   
   void adjustVolume(int delta) {
     // 节流：限制调整频率，避免长按时触发太快
@@ -683,6 +683,48 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     _volumeTipTimer = Timer(const Duration(seconds: 2), () {
       showGestureTip.value = false;
     });
+  }
+
+  /// 切换到下一个关注的直播间（右方向键）
+  void switchToNextLive() {
+    _switchFollowLive(1);
+  }
+
+  /// 切换到上一个关注的直播间（左方向键）
+  void switchToPrevLive() {
+    _switchFollowLive(-1);
+  }
+
+  void _switchFollowLive(int direction) {
+    final liveList = FollowService.instance.liveList;
+    if (liveList.isEmpty) {
+      SmartDialog.showToast("没有正在直播的关注");
+      return;
+    }
+    // 找到当前直播间在列表中的索引
+    int currentIndex = -1;
+    for (int i = 0; i < liveList.length; i++) {
+      if (liveList[i].siteId == rxSite.value.id &&
+          liveList[i].roomId == rxRoomId.value) {
+        currentIndex = i;
+        break;
+      }
+    }
+    int targetIndex;
+    if (currentIndex < 0) {
+      // 当前直播间不在关注列表中，切换到第一个
+      targetIndex = 0;
+    } else {
+      // 计算目标索引（循环）
+      targetIndex = (currentIndex + direction) % liveList.length;
+      if (targetIndex < 0) targetIndex = liveList.length - 1;
+    }
+    final target = liveList[targetIndex];
+    if (target.siteId == rxSite.value.id && target.roomId == rxRoomId.value) {
+      return; // 已经是这个房间了
+    }
+    Utils.hideRightDialog();
+    resetRoom(Sites.allSites[target.siteId]!, target.roomId);
   }
 
   void showQualitySheet() {
