@@ -7,6 +7,7 @@ import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/routes/route_path.dart';
 import 'package:simple_live_app/services/bilibili_account_service.dart';
 import 'package:simple_live_app/services/douyin_account_service.dart';
+import 'package:simple_live_app/services/kuaishou_account_service.dart';
 import 'package:simple_live_core/simple_live_core.dart';
 
 class AccountController extends GetxController {
@@ -89,6 +90,63 @@ class AccountController extends GetxController {
     } else {
       doDouyinCookieConfig();
     }
+  }
+
+  void kuaishouTap() async {
+    if (KuaishouAccountService.instance.hasCookie.value) {
+      var result = await Utils.showAlertDialog("确定要清除快手 Cookie 吗？", title: "清除配置");
+      if (result) {
+        KuaishouAccountService.instance.clearCookie();
+        SmartDialog.showToast("已清除快手 Cookie");
+      }
+    } else {
+      kuaishouLogin();
+    }
+  }
+
+  void kuaishouLogin() {
+    Utils.showBottomSheet(
+      title: "快手账号",
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (Platform.isAndroid || Platform.isIOS)
+            ListTile(
+              leading: const Icon(Icons.web),
+              title: const Text("Web登录"),
+              subtitle: const Text("在应用中打开快手网页登录"),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () {
+                Get.back();
+                Get.toNamed(RoutePath.kKuaishouWebLogin);
+              },
+            ),
+          ListTile(
+            leading: const Icon(Icons.edit_outlined),
+            title: const Text("Cookie登录"),
+            subtitle: const Text("手动粘贴快手 Cookie"),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Get.back();
+              doKuaishouCookieConfig();
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void doKuaishouCookieConfig() async {
+    var cookie = await Utils.showEditTextDialog(
+      "",
+      title: "请输入快手 Cookie",
+      hintText: "请输入 Cookie",
+    );
+    if (cookie == null || cookie.isEmpty) {
+      return;
+    }
+    KuaishouAccountService.instance.setCookie(cookie);
+    SmartDialog.showToast("快手 Cookie 已保存");
   }
 
   void doDouyinCookieConfig() {

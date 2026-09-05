@@ -4,6 +4,7 @@ import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/modules/mine/account/account_controller.dart';
 import 'package:simple_live_app/services/bilibili_account_service.dart';
 import 'package:simple_live_app/services/douyin_account_service.dart';
+import 'package:simple_live_app/services/kuaishou_account_service.dart';
 
 class AccountPage extends GetView<AccountController> {
   const AccountPage({Key? key}) : super(key: key);
@@ -75,6 +76,23 @@ class AccountPage extends GetView<AccountController> {
                   ? const Icon(Icons.delete_outline)
                   : const Icon(Icons.chevron_right),
               onTap: controller.douyinTap,
+            ),
+          ),
+          Obx(
+            () => ListTile(
+              leading: Image.asset(
+                'assets/images/kuaishou.png',
+                width: 36,
+                height: 36,
+              ),
+              title: const Text("快手直播"),
+              subtitle: Text(KuaishouAccountService.instance.hasCookie.value
+                  ? "已登录"
+                  : "Cookie登录"),
+              trailing: KuaishouAccountService.instance.hasCookie.value
+                  ? const Icon(Icons.delete_outline)
+                  : const Icon(Icons.chevron_right),
+              onTap: controller.kuaishouTap,
             ),
           ),
         ],

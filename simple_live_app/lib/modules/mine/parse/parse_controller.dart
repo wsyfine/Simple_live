@@ -7,8 +7,14 @@ import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/routes/app_navigation.dart';
+import 'package:simple_live_core/simple_live_core.dart';
 
 class ParseController extends GetxController {
+  ParseController({Dio? redirectClient})
+      : _redirectClient = redirectClient ?? Dio();
+
+  static const int _maxRedirects = 5;
+  final Dio _redirectClient;
   final TextEditingController roomJumpToController = TextEditingController();
   final TextEditingController getUrlController = TextEditingController();
 
@@ -155,8 +161,73 @@ class ParseController extends GetxController {
       var location = await getLocation(u);
       return await parse(location);
     }
+    final kuaishouRoomId = await resolveKuaishouRoomId(url);
+    if (kuaishouRoomId.isNotEmpty) {
+      return [kuaishouRoomId, Sites.allSites[Constant.kKuaishou]!];
+    }
 
     return [];
+  }
+
+  /// 仅解析已知的快手直播间链接，不需要账号Cookie。
+  Future<String> resolveKuaishouRoomId(String value) async {
+    final initial = KuaishouLiveLink.parseHttpUrl(value);
+    if (initial == null) {
+      return "";
+    }
+
+    final directRoomId = KuaishouLiveLink.roomIdFromUri(initial);
+    if (directRoomId != null) {
+      return directRoomId;
+    }
+    if (!KuaishouLiveLink.isShortLink(initial)) {
+      return "";
+    }
+
+    var current = initial;
+    final visited = <String>{};
+    try {
+      for (var redirectCount = 0;
+          redirectCount < _maxRedirects;
+          redirectCount++) {
+        if (!visited.add(current.toString())) {
+          return "";
+        }
+        final response = await _redirectClient.getUri<dynamic>(
+          current,
+          options: Options(
+            followRedirects: false,
+            validateStatus: (status) =>
+                status != null && status >= 200 && status < 400,
+            headers: const <String, dynamic>{},
+            connectTimeout: const Duration(seconds: 8),
+            receiveTimeout: const Duration(seconds: 8),
+            sendTimeout: const Duration(seconds: 8),
+          ),
+        );
+        final statusCode = response.statusCode ?? 0;
+        if (statusCode < 300 || statusCode >= 400) {
+          return "";
+        }
+        final location = response.headers.value("location");
+        if (location == null || location.trim().isEmpty) {
+          return "";
+        }
+
+        final next = current.resolve(location.trim());
+        if (!KuaishouLiveLink.isTrustedRedirectTarget(next)) {
+          return "";
+        }
+        final roomId = KuaishouLiveLink.roomIdFromUri(next);
+        if (roomId != null) {
+          return roomId;
+        }
+        current = next;
+      }
+    } catch (e) {
+      Log.logPrint(e);
+    }
+    return "";
   }
 
   Future<String> getLocation(String url) async {

@@ -120,6 +120,15 @@ class LocalStorageService extends GetxService {
   /// 抖音cookie
   static const String kDouyinCookie = "DouyinCookie";
 
+  /// 快手cookie
+  static const String kKuaishouCookie = "KuaishouCookie";
+
+  /// 快手kww
+  static const String kKuaishouKww = "KuaishouKww";
+
+  /// 快手cookie过期时间
+  static const String kKuaishouCookieExpiresAt = "KuaishouCookieExpiresAt";
+
   ///主题色
   static const String kStyleColor = "kStyleColor";
 
