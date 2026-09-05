@@ -654,7 +654,18 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
 
   /// 桌面端音量快捷键调整（上/下方向键，每次5%）
   Timer? _volumeTipTimer;
+  DateTime? _lastVolumeAdjustTime;
+  static const _volumeAdjustMinInterval = Duration(milliseconds: 150);
+  
   void adjustVolume(int delta) {
+    // 节流：限制调整频率，避免长按时触发太快
+    final now = DateTime.now();
+    if (_lastVolumeAdjustTime != null &&
+        now.difference(_lastVolumeAdjustTime!) < _volumeAdjustMinInterval) {
+      return;
+    }
+    _lastVolumeAdjustTime = now;
+    
     if (lockControlsState.value && fullScreenState.value) {
       return;
     }
