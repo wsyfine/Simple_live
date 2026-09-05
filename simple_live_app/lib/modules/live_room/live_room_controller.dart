@@ -652,6 +652,28 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     );
   }
 
+  /// 桌面端音量快捷键调整（上/下方向键，每次5%）
+  Timer? _volumeTipTimer;
+  void adjustVolume(int delta) {
+    if (lockControlsState.value && fullScreenState.value) {
+      return;
+    }
+    double current = AppSettingsController.instance.playerVolume.value;
+    double target = (current + delta).clamp(0.0, 100.0);
+    if (target == current) {
+      return;
+    }
+    player.setVolume(target);
+    AppSettingsController.instance.setPlayerVolume(target);
+    // 显示音量提示
+    gestureTipText.value = "音量 ${target.round()}%";
+    showGestureTip.value = true;
+    _volumeTipTimer?.cancel();
+    _volumeTipTimer = Timer(const Duration(seconds: 2), () {
+      showGestureTip.value = false;
+    });
+  }
+
   void showQualitySheet() {
     Utils.showBottomSheet(
       title: "切换清晰度",
@@ -1060,6 +1082,7 @@ ${error?.stackTrace}''');
     liveDanmaku.stop();
     danmakuController = null;
     _liveDurationTimer?.cancel(); // 页面关闭时取消定时器
+    _volumeTipTimer?.cancel();
     super.onClose();
   }
 }

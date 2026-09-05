@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:floating/floating.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:lottie/lottie.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -101,6 +102,23 @@ class LiveRoomPage extends GetView<LiveRoomController> {
         }
       },
     );
+    if (!Platform.isAndroid && !Platform.isIOS) {
+      // 桌面端音量快捷键：上方向键 +5%、下方向键 -5%
+      return KeyboardListener(
+        autofocus: true,
+        focusNode: FocusNode(),
+        onKeyEvent: (KeyEvent event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+              controller.adjustVolume(5);
+            } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+              controller.adjustVolume(-5);
+            }
+          }
+        },
+        child: page,
+      );
+    }
     if (!Platform.isAndroid) {
       return page;
     }
