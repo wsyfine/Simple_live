@@ -108,18 +108,22 @@ class LiveRoomPage extends GetView<LiveRoomController> {
         autofocus: true,
         focusNode: FocusNode(),
         onKeyEvent: (KeyEvent event) {
-          if (event is KeyDownEvent) {
+          // 回车全屏/退出全屏（仅首次按下，不响应长按重复）
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.enter) {
+            if (controller.fullScreenState.value) {
+              controller.exitFull();
+            } else {
+              controller.enterFullScreen();
+            }
+            return;
+          }
+          // 音量加减（支持长按重复）
+          if (event is KeyDownEvent || event is KeyRepeatEvent) {
             if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
               controller.adjustVolume(5);
             } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
               controller.adjustVolume(-5);
-            } else if (event.logicalKey == LogicalKeyboardKey.enter) {
-              // 回车全屏/退出全屏（与双击逻辑一致）
-              if (controller.fullScreenState.value) {
-                controller.exitFull();
-              } else {
-                controller.enterFullScreen();
-              }
             }
           }
         },
