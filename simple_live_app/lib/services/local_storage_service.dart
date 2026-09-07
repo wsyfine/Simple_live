@@ -177,6 +177,72 @@ class LocalStorageService extends GetxService {
   /// WebDAV_最后一次备份时间
   static const String kWebDAVLastRecoverTime = "kWebDAVLastRecoverTime";
 
+  /// 直播间快捷键-切换全屏
+  static const String kLiveRoomShortcutFullScreen =
+      "LiveRoomShortcutFullScreen";
+
+  /// 直播间快捷键-切换全屏（修饰键掩码）
+  static const String kLiveRoomShortcutFullScreenModifiers =
+      "LiveRoomShortcutFullScreenModifiers";
+
+  /// 直播间快捷键-显示/隐藏弹幕
+  static const String kLiveRoomShortcutDanmaku = "LiveRoomShortcutDanmaku";
+
+  /// 直播间快捷键-显示/隐藏弹幕（修饰键掩码）
+  static const String kLiveRoomShortcutDanmakuModifiers =
+      "LiveRoomShortcutDanmakuModifiers";
+
+  /// 直播间快捷键-静音/取消静音
+  static const String kLiveRoomShortcutMute = "LiveRoomShortcutMute";
+
+  /// 直播间快捷键-静音/取消静音（修饰键掩码）
+  static const String kLiveRoomShortcutMuteModifiers =
+      "LiveRoomShortcutMuteModifiers";
+
+  /// 直播间快捷键-刷新直播间
+  static const String kLiveRoomShortcutRefresh = "LiveRoomShortcutRefresh";
+
+  /// 直播间快捷键-刷新直播间（修饰键掩码）
+  static const String kLiveRoomShortcutRefreshModifiers =
+      "LiveRoomShortcutRefreshModifiers";
+
+  /// 直播间快捷键-收起/展开聊天区
+  static const String kLiveRoomShortcutToggleChat = "LiveRoomShortcutToggleChat";
+
+  /// 直播间快捷键-收起/展开聊天区（修饰键掩码）
+  static const String kLiveRoomShortcutToggleChatModifiers =
+      "LiveRoomShortcutToggleChatModifiers";
+
+  /// 直播间快捷键-调高音量
+  static const String kLiveRoomShortcutVolumeUp = "LiveRoomShortcutVolumeUp";
+
+  /// 直播间快捷键-调高音量（修饰键掩码）
+  static const String kLiveRoomShortcutVolumeUpModifiers =
+      "LiveRoomShortcutVolumeUpModifiers";
+
+  /// 直播间快捷键-调低音量
+  static const String kLiveRoomShortcutVolumeDown = "LiveRoomShortcutVolumeDown";
+
+  /// 直播间快捷键-调低音量（修饰键掩码）
+  static const String kLiveRoomShortcutVolumeDownModifiers =
+      "LiveRoomShortcutVolumeDownModifiers";
+
+  /// 直播间快捷键-调高亮度
+  static const String kLiveRoomShortcutBrightnessUp =
+      "LiveRoomShortcutBrightnessUp";
+
+  /// 直播间快捷键-调高亮度（修饰键掩码）
+  static const String kLiveRoomShortcutBrightnessUpModifiers =
+      "LiveRoomShortcutBrightnessUpModifiers";
+
+  /// 直播间快捷键-调低亮度
+  static const String kLiveRoomShortcutBrightnessDown =
+      "LiveRoomShortcutBrightnessDown";
+
+  /// 直播间快捷键-调低亮度（修饰键掩码）
+  static const String kLiveRoomShortcutBrightnessDownModifiers =
+      "LiveRoomShortcutBrightnessDownModifiers";
+
   late Box settingsBox;
   late Box<String> shieldBox;
 

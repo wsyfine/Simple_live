@@ -1,16 +1,58 @@
 import 'dart:io';
 
+import 'package:flutter/services.dart';
 import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
 class AppSettingsController extends GetxController {
   static AppSettingsController get instance =>
       Get.find<AppSettingsController>();
+
+  /// 快捷键禁用值
+  static const int kShortcutDisabled = 0;
+
+  /// 修饰键掩码：bit0=Ctrl bit1=Alt bit2=Shift bit3=Win
+  static const int kModifierCtrl = 1;
+  static const int kModifierAlt = 2;
+  static const int kModifierShift = 4;
+  static const int kModifierWin = 8;
+
+  /// 直播间快捷键可选项（keyId -> 显示名）
+  static final Map<int, String> liveRoomShortcutOptions = {
+    kShortcutDisabled: "关闭",
+    LogicalKeyboardKey.keyF.keyId: "F",
+    LogicalKeyboardKey.keyD.keyId: "D",
+    LogicalKeyboardKey.keyM.keyId: "M",
+    LogicalKeyboardKey.keyR.keyId: "R",
+    LogicalKeyboardKey.keyC.keyId: "C",
+    LogicalKeyboardKey.keyQ.keyId: "Q",
+    LogicalKeyboardKey.keyE.keyId: "E",
+    LogicalKeyboardKey.keyT.keyId: "T",
+    LogicalKeyboardKey.keyG.keyId: "G",
+    LogicalKeyboardKey.keyB.keyId: "B",
+    LogicalKeyboardKey.keyN.keyId: "N",
+    LogicalKeyboardKey.arrowUp.keyId: "↑",
+    LogicalKeyboardKey.arrowDown.keyId: "↓",
+  };
+
+  /// 修饰键显示名
+  static String modifierLabel(int modifiers) {
+    if (modifiers == 0) {
+      return "";
+    }
+    final parts = <String>[];
+    if (modifiers & kModifierCtrl != 0) parts.add("Ctrl");
+    if (modifiers & kModifierAlt != 0) parts.add("Alt");
+    if (modifiers & kModifierShift != 0) parts.add("Shift");
+    if (modifiers & kModifierWin != 0) parts.add("Win");
+    return parts.join("+");
+  }
 
   /// 缩放模式
   var scaleMode = 0.obs;
@@ -155,6 +197,7 @@ class AppSettingsController extends GetxController {
 
     initSiteSort();
     initHomeSort();
+    initLiveRoomShortcutSettings();
 
     super.onInit();
   }
@@ -530,5 +573,331 @@ class AppSettingsController extends GetxController {
     playerForceHttps.value = e;
     LocalStorageService.instance
         .setValue(LocalStorageService.kPlayerForceHttps, e);
+  }
+
+  // ---------- 直播间快捷键配置 ----------
+  // 每个快捷键由 keyId + modifiers（修饰键掩码）组成
+
+  var liveRoomShortcutFullScreen = LogicalKeyboardKey.keyF.keyId.obs;
+  var liveRoomShortcutFullScreenModifiers = 0.obs;
+
+  var liveRoomShortcutDanmaku = LogicalKeyboardKey.keyD.keyId.obs;
+  var liveRoomShortcutDanmakuModifiers = 0.obs;
+
+  var liveRoomShortcutMute = LogicalKeyboardKey.keyM.keyId.obs;
+  var liveRoomShortcutMuteModifiers = 0.obs;
+
+  var liveRoomShortcutRefresh = LogicalKeyboardKey.keyR.keyId.obs;
+  var liveRoomShortcutRefreshModifiers = 0.obs;
+
+  var liveRoomShortcutToggleChat = LogicalKeyboardKey.keyC.keyId.obs;
+  var liveRoomShortcutToggleChatModifiers = 0.obs;
+
+  var liveRoomShortcutVolumeUp = LogicalKeyboardKey.arrowUp.keyId.obs;
+  var liveRoomShortcutVolumeUpModifiers = 0.obs;
+
+  var liveRoomShortcutVolumeDown = LogicalKeyboardKey.arrowDown.keyId.obs;
+  var liveRoomShortcutVolumeDownModifiers = 0.obs;
+
+  var liveRoomShortcutBrightnessUp =
+      LogicalKeyboardKey.arrowUp.keyId.obs;
+
+  /// 亮度+默认 Shift+↑
+  var liveRoomShortcutBrightnessUpModifiers = kModifierShift.obs;
+
+  var liveRoomShortcutBrightnessDown =
+      LogicalKeyboardKey.arrowDown.keyId.obs;
+
+  /// 亮度-默认 Shift+↓
+  var liveRoomShortcutBrightnessDownModifiers = kModifierShift.obs;
+
+  /// 初始化直播间快捷键设置
+  void initLiveRoomShortcutSettings() {
+    liveRoomShortcutFullScreen.value = _normalizeLiveRoomShortcut(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveRoomShortcutFullScreen,
+        LogicalKeyboardKey.keyF.keyId,
+      ),
+    );
+    liveRoomShortcutFullScreenModifiers.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveRoomShortcutFullScreenModifiers,
+      0,
+    );
+
+    liveRoomShortcutDanmaku.value = _normalizeLiveRoomShortcut(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveRoomShortcutDanmaku,
+        LogicalKeyboardKey.keyD.keyId,
+      ),
+    );
+    liveRoomShortcutDanmakuModifiers.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveRoomShortcutDanmakuModifiers,
+      0,
+    );
+
+    liveRoomShortcutMute.value = _normalizeLiveRoomShortcut(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveRoomShortcutMute,
+        LogicalKeyboardKey.keyM.keyId,
+      ),
+    );
+    liveRoomShortcutMuteModifiers.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveRoomShortcutMuteModifiers,
+      0,
+    );
+
+    liveRoomShortcutRefresh.value = _normalizeLiveRoomShortcut(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveRoomShortcutRefresh,
+        LogicalKeyboardKey.keyR.keyId,
+      ),
+    );
+    liveRoomShortcutRefreshModifiers.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveRoomShortcutRefreshModifiers,
+      0,
+    );
+
+    liveRoomShortcutToggleChat.value = _normalizeLiveRoomShortcut(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveRoomShortcutToggleChat,
+        LogicalKeyboardKey.keyC.keyId,
+      ),
+    );
+    liveRoomShortcutToggleChatModifiers.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveRoomShortcutToggleChatModifiers,
+      0,
+    );
+
+    liveRoomShortcutVolumeUp.value = _normalizeLiveRoomShortcut(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveRoomShortcutVolumeUp,
+        LogicalKeyboardKey.arrowUp.keyId,
+      ),
+    );
+    liveRoomShortcutVolumeUpModifiers.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveRoomShortcutVolumeUpModifiers,
+      0,
+    );
+
+    liveRoomShortcutVolumeDown.value = _normalizeLiveRoomShortcut(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveRoomShortcutVolumeDown,
+        LogicalKeyboardKey.arrowDown.keyId,
+      ),
+    );
+    liveRoomShortcutVolumeDownModifiers.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveRoomShortcutVolumeDownModifiers,
+      0,
+    );
+
+    liveRoomShortcutBrightnessUp.value = _normalizeLiveRoomShortcut(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveRoomShortcutBrightnessUp,
+        LogicalKeyboardKey.arrowUp.keyId,
+      ),
+    );
+    liveRoomShortcutBrightnessUpModifiers.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveRoomShortcutBrightnessUpModifiers,
+      kModifierShift,
+    );
+
+    liveRoomShortcutBrightnessDown.value = _normalizeLiveRoomShortcut(
+      LocalStorageService.instance.getValue(
+        LocalStorageService.kLiveRoomShortcutBrightnessDown,
+        LogicalKeyboardKey.arrowDown.keyId,
+      ),
+    );
+    liveRoomShortcutBrightnessDownModifiers.value =
+        LocalStorageService.instance.getValue(
+      LocalStorageService.kLiveRoomShortcutBrightnessDownModifiers,
+      kModifierShift,
+    );
+  }
+
+  /// 校验快捷键值是否合法，不合法回退为关闭
+  int _normalizeLiveRoomShortcut(int value) {
+    return liveRoomShortcutOptions.containsKey(value)
+        ? value
+        : kShortcutDisabled;
+  }
+
+  /// 所有快捷键动作名称（用于冲突提示）
+  Map<String, int> get _liveRoomShortcutKeyLabels => {
+        "切换全屏": liveRoomShortcutFullScreen.value,
+        "显示/隐藏弹幕": liveRoomShortcutDanmaku.value,
+        "静音/取消静音": liveRoomShortcutMute.value,
+        "刷新直播间": liveRoomShortcutRefresh.value,
+        "收起/展开聊天区": liveRoomShortcutToggleChat.value,
+        "调高音量": liveRoomShortcutVolumeUp.value,
+        "调低音量": liveRoomShortcutVolumeDown.value,
+        "调高亮度": liveRoomShortcutBrightnessUp.value,
+        "调低亮度": liveRoomShortcutBrightnessDown.value,
+      };
+
+  Map<String, int> get _liveRoomShortcutModifierLabels => {
+        "切换全屏": liveRoomShortcutFullScreenModifiers.value,
+        "显示/隐藏弹幕": liveRoomShortcutDanmakuModifiers.value,
+        "静音/取消静音": liveRoomShortcutMuteModifiers.value,
+        "刷新直播间": liveRoomShortcutRefreshModifiers.value,
+        "收起/展开聊天区": liveRoomShortcutToggleChatModifiers.value,
+        "调高音量": liveRoomShortcutVolumeUpModifiers.value,
+        "调低音量": liveRoomShortcutVolumeDownModifiers.value,
+        "调高亮度": liveRoomShortcutBrightnessUpModifiers.value,
+        "调低亮度": liveRoomShortcutBrightnessDownModifiers.value,
+      };
+
+  /// 设置快捷键（含冲突检测）
+  void _setLiveRoomShortcut({
+    required int keyId,
+    required int modifiers,
+    required RxInt keyTarget,
+    required RxInt modifierTarget,
+    required String actionName,
+    required String storageKey,
+    required String modifiersStorageKey,
+  }) {
+    final normalized = _normalizeLiveRoomShortcut(keyId);
+    // 如果设置为关闭，跳过冲突检测
+    if (normalized != kShortcutDisabled) {
+      for (final entry in _liveRoomShortcutKeyLabels.entries) {
+        if (entry.key == actionName) {
+          continue;
+        }
+        if (entry.value == normalized &&
+            _liveRoomShortcutModifierLabels[entry.key] == modifiers) {
+          SmartDialog.showToast("该按键已用于${entry.key}");
+          return;
+        }
+      }
+    }
+    keyTarget.value = normalized;
+    modifierTarget.value = modifiers;
+    LocalStorageService.instance.setValue(storageKey, normalized);
+    LocalStorageService.instance
+        .setValue(modifiersStorageKey, modifiers);
+  }
+
+  void setLiveRoomShortcutFullScreen(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutFullScreen,
+      modifierTarget: liveRoomShortcutFullScreenModifiers,
+      actionName: "切换全屏",
+      storageKey: LocalStorageService.kLiveRoomShortcutFullScreen,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutFullScreenModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutDanmaku(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutDanmaku,
+      modifierTarget: liveRoomShortcutDanmakuModifiers,
+      actionName: "显示/隐藏弹幕",
+      storageKey: LocalStorageService.kLiveRoomShortcutDanmaku,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutDanmakuModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutMute(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutMute,
+      modifierTarget: liveRoomShortcutMuteModifiers,
+      actionName: "静音/取消静音",
+      storageKey: LocalStorageService.kLiveRoomShortcutMute,
+      modifiersStorageKey: LocalStorageService.kLiveRoomShortcutMuteModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutRefresh(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutRefresh,
+      modifierTarget: liveRoomShortcutRefreshModifiers,
+      actionName: "刷新直播间",
+      storageKey: LocalStorageService.kLiveRoomShortcutRefresh,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutRefreshModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutToggleChat(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutToggleChat,
+      modifierTarget: liveRoomShortcutToggleChatModifiers,
+      actionName: "收起/展开聊天区",
+      storageKey: LocalStorageService.kLiveRoomShortcutToggleChat,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutToggleChatModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutVolumeUp(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutVolumeUp,
+      modifierTarget: liveRoomShortcutVolumeUpModifiers,
+      actionName: "调高音量",
+      storageKey: LocalStorageService.kLiveRoomShortcutVolumeUp,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutVolumeUpModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutVolumeDown(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutVolumeDown,
+      modifierTarget: liveRoomShortcutVolumeDownModifiers,
+      actionName: "调低音量",
+      storageKey: LocalStorageService.kLiveRoomShortcutVolumeDown,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutVolumeDownModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutBrightnessUp(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutBrightnessUp,
+      modifierTarget: liveRoomShortcutBrightnessUpModifiers,
+      actionName: "调高亮度",
+      storageKey: LocalStorageService.kLiveRoomShortcutBrightnessUp,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutBrightnessUpModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutBrightnessDown(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutBrightnessDown,
+      modifierTarget: liveRoomShortcutBrightnessDownModifiers,
+      actionName: "调低亮度",
+      storageKey: LocalStorageService.kLiveRoomShortcutBrightnessDown,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutBrightnessDownModifiers,
+    );
   }
 }

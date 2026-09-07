@@ -27,6 +27,7 @@ import 'package:simple_live_app/widgets/follow_user_item.dart';
 import 'package:simple_live_core/simple_live_core.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
+import 'package:screen_brightness/screen_brightness.dart';
 
 class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   final Site pSite;
@@ -685,6 +686,77 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     });
   }
 
+  /// 桌面端亮度快捷键调整（Shift+上/下方向键，每次调整 0.05）
+  Timer? _brightnessTipTimer;
+  DateTime? _lastBrightnessAdjustTime;
+  static const _brightnessAdjustDelta = 0.05;
+  
+  Future<void> adjustBrightness(int direction) async {
+    // direction: 1 = 增加亮度, -1 = 降低亮度
+    // 节流：限制调整频率，避免长按时触发太快
+    final now = DateTime.now();
+    if (_lastBrightnessAdjustTime != null &&
+        now.difference(_lastBrightnessAdjustTime!) < _volumeAdjustMinInterval) {
+      return;
+    }
+    _lastBrightnessAdjustTime = now;
+
+    if (lockControlsState.value && fullScreenState.value) {
+      return;
+    }
+    try {
+      final current = await ScreenBrightness.instance.application;
+      final target =
+          (current + direction * _brightnessAdjustDelta).clamp(0.0, 1.0);
+      if (target == current) {
+        return;
+      }
+      await ScreenBrightness.instance.setApplicationScreenBrightness(target);
+      // 显示亮度提示
+      gestureTipText.value = "亮度 ${(target * 100).round()}%";
+      showGestureTip.value = true;
+      _brightnessTipTimer?.cancel();
+      _brightnessTipTimer = Timer(const Duration(seconds: 2), () {
+        showGestureTip.value = false;
+      });
+    } catch (e) {
+      Log.logPrint(e);
+    }
+  }
+
+  /// 静音/取消静音（快捷键）
+  double _lastMuteVolume = -1;
+  void toggleMute() {
+    if (lockControlsState.value && fullScreenState.value) {
+      return;
+    }
+    final current = AppSettingsController.instance.playerVolume.value;
+    if (current > 0) {
+      // 记录静音前音量并静音
+      _lastMuteVolume = current;
+      player.setVolume(0);
+      AppSettingsController.instance.setPlayerVolume(0);
+      gestureTipText.value = "已静音";
+    } else {
+      // 恢复上次音量（或默认 80%）
+      final restore = _lastMuteVolume > 0 ? _lastMuteVolume : 80.0;
+      player.setVolume(restore);
+      AppSettingsController.instance.setPlayerVolume(restore);
+      gestureTipText.value = "音量 ${restore.round()}%";
+    }
+    showGestureTip.value = true;
+    _volumeTipTimer?.cancel();
+    _volumeTipTimer = Timer(const Duration(seconds: 2), () {
+      showGestureTip.value = false;
+    });
+  }
+
+  /// 直播间聊天区显示/隐藏（快捷键）
+  var chatShowState = true.obs;
+  void toggleChatShowState() {
+    chatShowState.value = !chatShowState.value;
+  }
+
   /// 切换到下一个关注的直播间（右方向键）
   void switchToNextLive() {
     _switchFollowLive(1);
@@ -1095,6 +1167,27 @@ ${error?.stackTrace}''');
     }
   }
 
+  // 尝试切换到下一个播放线路（用于播放停滞恢复）
+  Future<bool> trySwitchLine() async {
+    if (playUrls.isEmpty) {
+      return false;
+    }
+    
+    // 如果当前有线路，尝试切换到下一个
+    int nextIndex = currentLineIndex + 1;
+    if (nextIndex >= playUrls.length) {
+      // 如果已经是最后一个线路，回到第一个
+      nextIndex = 0;
+    }
+    
+    if (nextIndex != currentLineIndex) {
+      changePlayLine(nextIndex);
+      return true;
+    }
+    
+    return false;
+  }
+  
   // 用于启动开播时长计算和更新的函数
   void startLiveDurationTimer() {
     // 如果不是直播状态或者 showTime 为空，则不启动定时器
@@ -1136,6 +1229,8 @@ ${error?.stackTrace}''');
     danmakuController = null;
     _liveDurationTimer?.cancel(); // 页面关闭时取消定时器
     _volumeTipTimer?.cancel();
+    _brightnessTipTimer?.cancel();
+    
     super.onClose();
   }
 }

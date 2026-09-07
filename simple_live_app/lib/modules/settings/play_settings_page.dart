@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
+import 'package:simple_live_app/routes/route_path.dart';
 import 'package:simple_live_app/widgets/settings/settings_card.dart';
 import 'package:simple_live_app/widgets/settings/settings_menu.dart';
 import 'package:simple_live_app/widgets/settings/settings_number.dart';
@@ -21,6 +22,35 @@ class PlaySettingsPage extends GetView<AppSettingsController> {
       body: ListView(
         padding: AppStyle.edgeInsetsA12,
         children: [
+          if (Platform.isWindows)
+            Padding(
+              padding: AppStyle.edgeInsetsA12.copyWith(top: 0),
+              child: Text(
+                "快捷键",
+                style: Get.textTheme.titleSmall,
+              ),
+            ),
+          if (Platform.isWindows)
+            SettingsCard(
+              child: ListTile(
+                visualDensity: VisualDensity.compact,
+                title: const Text(
+                  "桌面端快捷键设置",
+                  style: TextStyle(fontSize: 15),
+                ),
+                subtitle: const Text(
+                  "自定义全屏/弹幕/静音/刷新/音量/亮度等快捷键（支持组合键）",
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                trailing: const Icon(
+                  Icons.chevron_right,
+                  color: Colors.grey,
+                ),
+                onTap: () {
+                  Get.toNamed(RoutePath.kSettingsShortcut);
+                },
+              ),
+            ),
           Padding(
             padding: AppStyle.edgeInsetsA12.copyWith(top: 0),
             child: Text(

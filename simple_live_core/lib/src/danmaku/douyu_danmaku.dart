@@ -17,14 +17,38 @@ class DouyuDanmaku implements LiveDanmaku {
   Function(String msg)? onClose;
   @override
   Function()? onReady;
-  String serverUrl = "wss://danmuproxy.douyu.com:8506";
+
+  /// 斗鱼弹幕代理服务器地址
+  static const String _baseHost = "wss://danmuproxy.douyu.com";
+
+  /// 尝试连接的端口列表（8501-8506）
+  static const List<int> _proxyPorts = [8501, 8502, 8503, 8504, 8505, 8506];
+
+  /// 当前使用的端口
+  int _currentPortIndex = 0;
+
+  /// 当前使用的 WebSocket URL
+  String get _currentUrl => "$_baseHost:${_proxyPorts[_currentPortIndex]}";
+
+  /// 备用 URL 列表（除当前端口外的其他端口）
+  List<String> get _backupUrls {
+    final backups = <String>[];
+    for (var i = 0; i < _proxyPorts.length; i++) {
+      if (i != _currentPortIndex) {
+        backups.add("$_baseHost:${_proxyPorts[i]}");
+      }
+    }
+    return backups;
+  }
 
   WebScoketUtils? webScoketUtils;
 
   @override
   Future start(dynamic args) async {
+    CoreLog.d("[DouyuDanmaku] 正在连接弹幕服务器，当前端口: ${_proxyPorts[_currentPortIndex]}");
     webScoketUtils = WebScoketUtils(
-      url: serverUrl,
+      url: _currentUrl,
+      backupUrls: _backupUrls,
       heartBeatTime: heartbeatTime,
       onMessage: (e) {
         decodeMessage(e);
@@ -40,6 +64,9 @@ class DouyuDanmaku implements LiveDanmaku {
         onClose?.call("与服务器断开连接，正在尝试重连");
       },
       onClose: (e) {
+        CoreLog.error("[DouyuDanmaku] 服务器连接失败: $e");
+        // 连接失败时切换到下一个端口，下次 start 会使用新端口
+        _currentPortIndex = (_currentPortIndex + 1) % _proxyPorts.length;
         onClose?.call("服务器连接失败$e");
       },
     );

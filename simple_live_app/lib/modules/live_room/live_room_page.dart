@@ -103,11 +103,19 @@ class LiveRoomPage extends GetView<LiveRoomController> {
       },
     );
     if (!Platform.isAndroid && !Platform.isIOS) {
-      // 桌面端音量快捷键：上方向键 +5%、下方向键 -5%
+      // 桌面端快捷键（音量/亮度/F/D/M/R/C 等由原生层捕获统一处理）
+      // 此处仅保留未被原生层捕获的按键：Enter 全屏、←/→ 切换直播间
       return KeyboardListener(
         autofocus: true,
         focusNode: FocusNode(),
         onKeyEvent: (KeyEvent event) {
+          // 输入法组合输入中不响应快捷键（防止与中文输入法冲突）
+          if (event is KeyDownEvent &&
+              FocusManager.instance.primaryFocus?.context
+                      ?.findAncestorWidgetOfExactType<EditableText>() !=
+                  null) {
+            return;
+          }
           // 回车全屏/退出全屏（仅首次按下，不响应长按重复）
           if (event is KeyDownEvent &&
               event.logicalKey == LogicalKeyboardKey.enter) {
@@ -126,14 +134,6 @@ class LiveRoomPage extends GetView<LiveRoomController> {
             } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
               controller.switchToNextLive();
               return;
-            }
-          }
-          // 音量加减（支持长按重复）
-          if (event is KeyDownEvent || event is KeyRepeatEvent) {
-            if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-              controller.adjustVolume(5);
-            } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-              controller.adjustVolume(-5);
             }
           }
         },
@@ -176,7 +176,11 @@ class LiveRoomPage extends GetView<LiveRoomController> {
           child: buildMediaPlayer(),
         ),
         buildUserProfile(context),
-        buildMessageArea(),
+        Obx(
+          () => controller.chatShowState.value
+              ? buildMessageArea()
+              : const Spacer(),
+        ),
         buildBottomActions(context),
       ],
     );
@@ -191,14 +195,18 @@ class LiveRoomPage extends GetView<LiveRoomController> {
               Expanded(
                 child: buildMediaPlayer(),
               ),
-              SizedBox(
-                width: 300,
-                child: Column(
-                  children: [
-                    buildUserProfile(context),
-                    buildMessageArea(),
-                  ],
-                ),
+              Obx(
+                () => controller.chatShowState.value
+                    ? SizedBox(
+                        width: 300,
+                        child: Column(
+                          children: [
+                            buildUserProfile(context),
+                            buildMessageArea(),
+                          ],
+                        ),
+                      )
+                    : const SizedBox(width: 300),
               ),
             ],
           ),
@@ -477,18 +485,18 @@ class LiveRoomPage extends GetView<LiveRoomController> {
         length: controller.site.id == Constant.kBiliBili ? 4 : 3,
         child: Column(
           children: [
-            TabBar(
+            const TabBar(
               indicatorSize: TabBarIndicatorSize.tab,
               labelPadding: EdgeInsets.zero,
               indicatorWeight: 1.0,
               tabs: [
-                const Tab(
+                Tab(
                   text: "聊天",
                 ),
-                const Tab(
+                Tab(
                   text: "关注",
                 ),
-                const Tab(
+                Tab(
                   text: "设置",
                 ),
               ],

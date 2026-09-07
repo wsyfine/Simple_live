@@ -14,8 +14,11 @@ class WebScoketUtils {
   /// 链接
   final String url;
 
-  /// 备用链接
+  /// 备用链接（单个，向下兼容）
   final String? backupUrl;
+
+  /// 备用链接列表（用于端口轮询等场景）
+  final List<String>? backupUrls;
 
   /// 心跳时间
   final int heartBeatTime;
@@ -37,6 +40,13 @@ class WebScoketUtils {
 
   /// 请求头
   Map<String, dynamic>? headers;
+
+  /// 当前尝试的备用链接索引
+  int _currentBackupIndex = 0;
+
+  /// 是否正在使用备用链接
+  bool _usingBackup = false;
+
   WebScoketUtils({
     required this.url,
     required this.heartBeatTime,
@@ -47,6 +57,7 @@ class WebScoketUtils {
     this.onHeartBeat,
     this.headers,
     this.backupUrl,
+    this.backupUrls,
   });
   IOWebSocketChannel? webSocket;
   Timer? heartBeatTimer;
@@ -63,10 +74,7 @@ class WebScoketUtils {
   void connect({bool retry = false}) async {
     close();
     try {
-      var wsurl = url;
-      if (backupUrl != null && backupUrl!.isNotEmpty && retry) {
-        wsurl = backupUrl!;
-      }
+      var wsurl = _selectUrl(retry);
       webSocket = IOWebSocketChannel.connect(
         wsurl,
         connectTimeout: Duration(seconds: 10),
@@ -74,14 +82,47 @@ class WebScoketUtils {
       );
 
       await webSocket?.ready;
+      // 连接成功，重置备用索引
+      _currentBackupIndex = 0;
+      _usingBackup = false;
       ready();
     } catch (e) {
-      if (!retry) {
+      var nextAvailable = _advanceBackupIndex();
+      if (nextAvailable) {
+        // 有下一个备用地址，继续尝试
+        connect(retry: true);
+        return;
+      }
+      if (!retry && backupUrl != null) {
+        // 尝试单个备用地址
         connect(retry: true);
         return;
       }
       onError(e, e);
     }
+  }
+
+  /// 选择当前要连接的 URL
+  String _selectUrl(bool retry) {
+    if (_usingBackup && backupUrls != null && _currentBackupIndex < backupUrls!.length) {
+      return backupUrls![_currentBackupIndex];
+    }
+    if (retry && backupUrl != null) {
+      _usingBackup = true;
+      return backupUrl!;
+    }
+    return url;
+  }
+
+  /// 前进到下一个备用链接索引
+  /// 返回 true 表示还有更多备用地址可用
+  bool _advanceBackupIndex() {
+    if (backupUrls != null && _currentBackupIndex + 1 < backupUrls!.length) {
+      _currentBackupIndex++;
+      _usingBackup = true;
+      return true;
+    }
+    return false;
   }
 
   /// 连接完成
@@ -150,7 +191,7 @@ class WebScoketUtils {
     status = SocketStatus.closed;
     if (reconnectTime < maxReconnectTime) {
       reconnectTime++;
-      reconnectTimer ??= Timer.periodic(Duration(seconds: 5), (timer) {
+      reconnectTimer = Timer.periodic(Duration(seconds: 5), (timer) {
         connect();
       });
     } else {

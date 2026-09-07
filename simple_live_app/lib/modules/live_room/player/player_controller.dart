@@ -21,6 +21,7 @@ import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/utils.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:simple_live_app/modules/live_room/live_room_controller.dart';
 
 mixin PlayerMixin {
   GlobalKey<VideoState> globalPlayerKey = GlobalKey<VideoState>();
@@ -543,14 +544,19 @@ mixin PlayerGestureControlMixin
     throttle = DelayedThrottle(200);
 
     verticalDragging = true;
-    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
-      showGestureTip.value = true;
-    }
+    // 所有平台都显示调节数值浮层（含Windows/Linux桌面端）
+    showGestureTip.value = true;
     if (Platform.isAndroid || Platform.isIOS) {
       _currentVolume = await VolumeController.instance.getVolume();
+    } else {
+      // 桌面端从应用设置读取当前音量（0-100 转为 0-1）
+      _currentVolume = AppSettingsController.instance.playerVolume.value / 100;
     }
-    if (Platform.isAndroid || Platform.isIOS || Platform.isMacOS) {
+    try {
       _currentBrightness = await ScreenBrightness.instance.application;
+    } catch (e) {
+      // 部分桌面平台可能不支持读取亮度，默认按 1.0 处理
+      _currentBrightness = 1.0;
     }
   }
 
@@ -560,13 +566,9 @@ mixin PlayerGestureControlMixin
       return;
     }
     if (verticalDragging == false) return;
-    if (!Platform.isAndroid && !Platform.isIOS) {
-      return;
-    }
+
     //String text = "";
     //double value = 0.0;
-
-    Log.logPrint("$verStartPosition/${e.globalPosition.dy}");
 
     if (leftVerticalDrag) {
       setGestureBrightness(e.globalPosition.dy);
@@ -610,33 +612,63 @@ mixin PlayerGestureControlMixin
   }
 
   Future _realSetVolume(int volume) async {
-    Log.logPrint(volume);
-    VolumeController.instance.setVolume(volume / 100);
+    if (volume == _lastAppliedVolume) {
+      return;
+    }
+    _lastAppliedVolume = volume;
+    try {
+      await VolumeController.instance.setVolume(volume / 100);
+    } catch (e) {
+      Log.logPrint(e);
+    }
   }
+
+  // 上一次已应用的音量（用于去重）
+  int _lastAppliedVolume = -1;
+
+  // 亮度节流：限制高频平台调用，避免卡顿掉帧
+  DateTime? _lastBrightnessApplyAt;
+  double _lastAppliedBrightness = -1;
+  static const _brightnessApplyMinInterval = Duration(milliseconds: 50);
 
   void setGestureBrightness(double dy) {
     double value = 0.0;
+    double seek;
     if (dy > verStartPosition) {
       value = ((dy - verStartPosition) / (Get.height * 0.5));
-
-      var seek = _currentBrightness - value;
+      seek = _currentBrightness - value;
       if (seek < 0) {
         seek = 0;
       }
-      ScreenBrightness.instance.setApplicationScreenBrightness(seek);
-
-      gestureTipText.value = "亮度 ${(seek * 100).toInt()}%";
-      Log.logPrint(value);
     } else {
       value = ((dy - verStartPosition) / (Get.height * 0.5));
-      var seek = value.abs() + _currentBrightness;
+      seek = value.abs() + _currentBrightness;
       if (seek > 1) {
         seek = 1;
       }
+    }
+    // UI 数值实时更新，不经过节流
+    gestureTipText.value = "亮度 ${(seek * 100).toInt()}%";
+    _applyBrightnessThrottled(seek);
+  }
 
+  /// 节流应用亮度（Windows 上 WMI/平台通道调用较慢，过高频率会阻塞主线程导致掉帧）
+  void _applyBrightnessThrottled(double seek) {
+    final now = DateTime.now();
+    if (_lastBrightnessApplyAt != null &&
+        now.difference(_lastBrightnessApplyAt!) < _brightnessApplyMinInterval) {
+      return;
+    }
+    _lastBrightnessApplyAt = now;
+    // 值去重：几乎相同的亮度不重复设置
+    if ((seek - _lastAppliedBrightness).abs() < 0.005) {
+      return;
+    }
+    _lastAppliedBrightness = seek;
+    try {
       ScreenBrightness.instance.setApplicationScreenBrightness(seek);
-      gestureTipText.value = "亮度 ${(seek * 100).toInt()}%";
-      Log.logPrint(value);
+    } catch (e) {
+      Log.logPrint(e);
     }
   }
 
@@ -665,8 +697,27 @@ class PlayerController extends BaseController
     initStream();
     //设置音量
     player.setVolume(AppSettingsController.instance.playerVolume.value);
+    // 启动播放停滞 watchdog
+    _startPlaybackStallWatchdog();
     super.onInit();
   }
+
+  // --- 播放停滞 watchdog 相关变量 ---
+  Timer? _playbackStallWatchdogTimer;
+  Timer? _playbackStallStableTimer;
+  Duration? _stallLastPosition;
+  DateTime? _stallLastProgressAt;
+  DateTime? _lastPlaybackStallRecoveryAt;
+  int _stallLoadGeneration = 0;
+  String? _stallMediaUri;
+  int _playbackStallRecoveryAttempts = 0;
+  bool _playbackStallRecoveryInFlight = false;
+
+  static const _playbackStallSampleInterval = Duration(seconds: 3);
+  static const _playbackStallTimeout = Duration(seconds: 15);
+  static const _playbackBufferingStallTimeout = Duration(seconds: 30);
+  static const _playbackStallCooldown = Duration(seconds: 5);
+  static const _maxPlaybackStallRecoveryAttempts = 3;
 
   StreamSubscription<String>? _errorSubscription;
   StreamSubscription? _completedSubscription;
@@ -843,6 +894,117 @@ class PlayerController extends BaseController
     disposeDanmakuController();
     await resetSystem();
     await player.dispose();
+    // 停止播放停滞 watchdog
+    _playbackStallWatchdogTimer?.cancel();
+    _playbackStallStableTimer?.cancel();
     super.onClose();
+  }
+
+  /// 启动播放停滞 watchdog
+  void _startPlaybackStallWatchdog() {
+    _playbackStallWatchdogTimer?.cancel();
+    _playbackStallWatchdogTimer = Timer.periodic(
+      _playbackStallSampleInterval,
+      (_) => _checkPlaybackStall(),
+    );
+  }
+
+  /// 检查播放是否停滞
+  void _checkPlaybackStall() {
+    final now = DateTime.now();
+    // 使用 playlist.medias[index] 获取当前媒体 URI
+    final playlistIndex = player.state.playlist.index;
+    final playlistMedias = player.state.playlist.medias;
+    String? mediaUri;
+    if (playlistIndex >= 0 && playlistIndex < playlistMedias.length) {
+      mediaUri = playlistMedias[playlistIndex].uri;
+    }
+    final position = player.state.position;
+    final buffering = player.state.buffering;
+
+    // 如果加载代次或媒体 URI 发生变化，重置计数器
+    if (_stallMediaUri != mediaUri) {
+      _stallLoadGeneration = player.state.playlist.index;
+      _stallMediaUri = mediaUri;
+      _stallLastPosition = position;
+      _stallLastProgressAt = now;
+      _playbackStallRecoveryAttempts = 0;
+      _playbackStallStableTimer?.cancel();
+      _playbackStallStableTimer = null;
+      return;
+    }
+
+    // 检查位置是否发生了变化
+    if (_stallLastPosition == null || position != _stallLastPosition) {
+      _stallLastPosition = position;
+      _stallLastProgressAt = now;
+      
+      // 如果刚刚从恢复中恢复正常播放，重置稳定计时器
+      if (_playbackStallRecoveryAttempts > 0 && _playbackStallStableTimer == null) {
+        _playbackStallStableTimer = Timer(const Duration(seconds: 30), () {
+          _playbackStallStableTimer = null;
+          _playbackStallRecoveryAttempts = 0;
+        });
+      }
+      return;
+    }
+
+    // 检查是否已经超过停滞超时时间
+    final lastProgressAt = _stallLastProgressAt;
+    if (lastProgressAt != null &&
+        now.difference(lastProgressAt) >
+            (buffering ? _playbackBufferingStallTimeout : _playbackStallTimeout)) {
+      // 检查是否满足恢复条件
+      if (_playbackStallRecoveryInFlight ||
+          _playbackStallRecoveryAttempts >= _maxPlaybackStallRecoveryAttempts ||
+          (_lastPlaybackStallRecoveryAt != null &&
+              now.difference(_lastPlaybackStallRecoveryAt!) < _playbackStallCooldown)) {
+        return;
+      }
+
+      // 触发恢复操作
+      _recoverPlaybackStall();
+    }
+  }
+
+  /// 恢复播放停滞
+  Future<void> _recoverPlaybackStall() async {
+    if (_playbackStallRecoveryInFlight) {
+      return;
+    }
+
+    _playbackStallRecoveryInFlight = true;
+    _playbackStallRecoveryAttempts += 1;
+    _lastPlaybackStallRecoveryAt = DateTime.now();
+    _stallLastProgressAt = DateTime.now();
+
+    SmartDialog.showToast(
+      "播放停滞，正在尝试恢复 (${_playbackStallRecoveryAttempts}/$_maxPlaybackStallRecoveryAttempts)",
+    );
+
+    try {
+      // 尝试换线
+      final switched = await Get.find<LiveRoomController>().trySwitchLine();
+      if (switched && Get.find<LiveRoomController>().currentLineIndex >= 0) {
+        SmartDialog.showToast("已切换到备用线路");
+      } else {
+        // 如果没有备用线路，则刷新
+        Get.find<LiveRoomController>().refreshRoom();
+        SmartDialog.showToast("已刷新直播间");
+      }
+    } catch (e, stackTrace) {
+      Log.e("播放停滞恢复失败：$e", stackTrace);
+      SmartDialog.showToast("恢复失败，将继续重试");
+    } finally {
+      _playbackStallRecoveryInFlight = false;
+    }
+  }
+
+  /// 重置播放停滞样本
+  void _resetPlaybackStallSample() {
+    _stallLastPosition = null;
+    _stallLastProgressAt = null;
+    _playbackStallStableTimer?.cancel();
+    _playbackStallStableTimer = null;
   }
 }
