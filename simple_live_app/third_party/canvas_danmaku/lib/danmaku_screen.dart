@@ -1,5 +1,6 @@
 import 'package:canvas_danmaku/utils/utils.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'models/danmaku_item.dart';
 import 'scroll_danmaku_painter.dart';
 import 'special_danmaku_painter.dart';
@@ -191,6 +192,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
               fontSize: content.fontSize,
               fontWeight: FontWeight.values[_option.fontWeight],
               fontFamily: _option.fontFamily,
+              fontFamilyFallback: _option.fontFamilyFallback,
               shadows: content.hasStroke
                   ? [
                       Shadow(
@@ -226,6 +228,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
         _option.fontWeight,
         _option.emojiScale,
         _option.fontFamily,
+        _option.fontFamilyFallback,
       );
       final danmakuWidth = contentSize.width;
       final danmakuHeight = contentSize.height;
@@ -237,6 +240,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
         _option.fontWeight,
         _option.emojiScale,
         _option.fontFamily,
+        _option.fontFamilyFallback,
       );
 
       ui.Paragraph? strokeParagraph;
@@ -248,6 +252,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
           _option.fontWeight,
           _option.emojiScale,
           _option.fontFamily,
+          _option.fontFamilyFallback,
         );
       }
 
@@ -482,6 +487,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
     return a.fontSize == b.fontSize &&
         a.fontWeight == b.fontWeight &&
         a.fontFamily == b.fontFamily &&
+        listEquals(a.fontFamilyFallback, b.fontFamilyFallback) &&
         a.area == b.area &&
         a.lineHeight == b.lineHeight &&
         a.emojiScale == b.emojiScale &&
@@ -611,6 +617,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
         style: TextStyle(
           fontSize: _option.fontSize,
           fontFamily: _option.fontFamily,
+          fontFamilyFallback: _option.fontFamilyFallback,
         ),
       ),
       textDirection: TextDirection.ltr,
@@ -656,6 +663,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
                             _option.fontSize,
                             _option.fontWeight,
                             _option.fontFamily,
+                            _option.fontFamilyFallback,
                             _option.showStroke,
                             _danmakuHeight,
                             _running,
@@ -680,6 +688,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
                             _option.fontSize,
                             _option.fontWeight,
                             _option.fontFamily,
+                            _option.fontFamilyFallback,
                             _option.showStroke,
                             _danmakuHeight,
                             _running,
@@ -702,6 +711,7 @@ class _DanmakuScreenState extends State<DanmakuScreen>
                             _option.fontSize,
                             _option.fontWeight,
                             _option.fontFamily,
+                            _option.fontFamilyFallback,
                             _running,
                             _tick,
                           ),

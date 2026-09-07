@@ -12,6 +12,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:simple_live_app/app/log.dart';
+import 'package:window_manager/window_manager.dart';
 
 typedef TextValidate = bool Function(String text);
 
@@ -340,6 +341,15 @@ class Utils {
       cancel: "退出",
     );
     if (!result) {
+      // 桌面端优雅关闭窗口，避免直接 exit(0) 触发 Windows hard error
+      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+        try {
+          await windowManager.destroy();
+          return;
+        } catch (e) {
+          Log.logPrint(e);
+        }
+      }
       exit(0);
     }
   }

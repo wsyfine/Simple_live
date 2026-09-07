@@ -68,11 +68,24 @@ mixin PlayerMixin {
                 vo: 'mediacodec_embed',
                 hwdec: 'mediacodec',
               )
-            : VideoControllerConfiguration(
-                enableHardwareAcceleration:
-                    AppSettingsController.instance.hardwareDecode.value,
-                androidAttachSurfaceAfterVideoParameters: false,
-              ),
+            // Windows: 显式指定 vo/hwdec，避免默认 libmpv + hwdec=auto
+            // 在部分显卡驱动下硬解失败且无回退，导致有声音无画面的灰屏
+            // hwdec=auto-safe 会在硬解失败时自动回退到软解
+            : Platform.isWindows
+                ? VideoControllerConfiguration(
+                    vo: 'gpu',
+                    hwdec: AppSettingsController.instance.hardwareDecode.value
+                        ? 'auto-safe'
+                        : 'no',
+                    enableHardwareAcceleration:
+                        AppSettingsController.instance.hardwareDecode.value,
+                    androidAttachSurfaceAfterVideoParameters: false,
+                  )
+                : VideoControllerConfiguration(
+                    enableHardwareAcceleration:
+                        AppSettingsController.instance.hardwareDecode.value,
+                    androidAttachSurfaceAfterVideoParameters: false,
+                  ),
   );
 }
 
@@ -273,7 +286,7 @@ mixin PlayerSystemMixin on PlayerMixin, PlayerStateMixin, PlayerDanmakuMixin {
   }
 
   /// 进入全屏
-  void enterFullScreen() {
+  Future<void> enterFullScreen() async {
     fullScreenState.value = true;
     if (Platform.isAndroid || Platform.isIOS) {
       //全屏
@@ -283,19 +296,38 @@ mixin PlayerSystemMixin on PlayerMixin, PlayerStateMixin, PlayerDanmakuMixin {
         setLandscapeOrientation();
       }
     } else {
-      windowManager.setFullScreen(true);
+      // 保存当前窗口尺寸与位置，便于退出全屏后精确恢复
+      try {
+        _lastWindowSize = await windowManager.getSize();
+        _lastWindowPosition = await windowManager.getPosition();
+      } catch (e) {
+        Log.logPrint(e);
+      }
+      await windowManager.setFullScreen(true);
     }
     //danmakuController?.clear();
   }
 
   /// 退出全屏
-  void exitFull() {
+  Future<void> exitFull() async {
     if (Platform.isAndroid || Platform.isIOS) {
       SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge,
           overlays: SystemUiOverlay.values);
       setPortraitOrientation();
     } else {
-      windowManager.setFullScreen(false);
+      await windowManager.setFullScreen(false);
+      // 等窗口恢复非全屏后，显式恢复上次的尺寸与位置，
+      // 修复 Windows 上偶尔出现的退出全屏后窗口无法恢复的问题
+      try {
+        if (_lastWindowSize != null) {
+          await windowManager.setSize(_lastWindowSize!);
+        }
+        if (_lastWindowPosition != null) {
+          await windowManager.setPosition(_lastWindowPosition!);
+        }
+      } catch (e) {
+        Log.logPrint(e);
+      }
     }
     fullScreenState.value = false;
 
@@ -339,8 +371,13 @@ mixin PlayerSystemMixin on PlayerMixin, PlayerStateMixin, PlayerDanmakuMixin {
       fullScreenState.value = false;
       smallWindowState.value = false;
       windowManager.setTitleBarStyle(TitleBarStyle.normal);
-      windowManager.setSize(_lastWindowSize!);
-      windowManager.setPosition(_lastWindowPosition!);
+      // 未记录过窗口大小时跳过恢复，避免空指针/恢复异常
+      if (_lastWindowSize != null) {
+        windowManager.setSize(_lastWindowSize!);
+      }
+      if (_lastWindowPosition != null) {
+        windowManager.setPosition(_lastWindowPosition!);
+      }
       windowManager.setAlwaysOnTop(false);
       //windowManager.setAlignment(Alignment.center);
     }
@@ -546,11 +583,23 @@ mixin PlayerGestureControlMixin
     verticalDragging = true;
     // 所有平台都显示调节数值浮层（含Windows/Linux桌面端）
     showGestureTip.value = true;
+    // 重置跨手势去重状态，避免新手势首次拖动被旧值跳过
+    lastVolume = -1;
+    _lastAppliedVolume = -1;
     if (Platform.isAndroid || Platform.isIOS) {
       _currentVolume = await VolumeController.instance.getVolume();
     } else {
-      // 桌面端从应用设置读取当前音量（0-100 转为 0-1）
-      _currentVolume = AppSettingsController.instance.playerVolume.value / 100;
+      // 桌面端：优先读取系统当前音量作为基线（与手势写入的系统音量同通道，
+      // 避免基线偏差导致音量跳变/衰减异常）；失败时回退应用设置值
+      try {
+        _currentVolume = await VolumeController.instance.getVolume();
+        if (_currentVolume < 0 || _currentVolume > 1) {
+          throw StateError("invalid volume");
+        }
+      } catch (e) {
+        _currentVolume =
+            AppSettingsController.instance.playerVolume.value / 100;
+      }
     }
     try {
       _currentBrightness = await ScreenBrightness.instance.application;
@@ -621,6 +670,9 @@ mixin PlayerGestureControlMixin
     } catch (e) {
       Log.logPrint(e);
     }
+    // 同步应用设置与持久化，保证下次手势/设置页/快捷键基线一致，
+    // 避免手势改的是系统音量而基线仍是旧设置导致的音量衰减/弹回
+    AppSettingsController.instance.setPlayerVolume(volume.toDouble());
   }
 
   // 上一次已应用的音量（用于去重）

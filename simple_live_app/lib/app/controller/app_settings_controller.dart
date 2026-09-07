@@ -6,6 +6,7 @@ import 'package:simple_live_app/app/sites.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 
@@ -22,116 +23,125 @@ class AppSettingsController extends GetxController {
   static const int kModifierShift = 4;
   static const int kModifierWin = 8;
 
-  /// Windows 虚拟键码（VK）名称表（设置界面显示用）
-  static String windowsVkLabel(int vk) {
-    if (vk >= 0x41 && vk <= 0x5A) return String.fromCharCode(vk);
-    if (vk >= 0x30 && vk <= 0x39) return String.fromCharCode(vk);
-    if (vk >= 0x70 && vk <= 0x7A) return "F${vk - 0x70 + 1}";
-    if (vk >= 0x7B && vk <= 0x87) return "F${vk - 0x70 + 1}";
-    switch (vk) {
-      case 0x08:
-        return "Backspace";
-      case 0x09:
-        return "Tab";
-      case 0x0D:
-        return "Enter";
-      case 0x1B:
-        return "Esc";
-      case 0x20:
-        return "Space";
-      case 0x21:
-        return "PageUp";
-      case 0x22:
-        return "PageDown";
-      case 0x23:
-        return "End";
-      case 0x24:
-        return "Home";
-      case 0x25:
-        return "←";
-      case 0x26:
-        return "↑";
-      case 0x27:
-        return "→";
+  /// 默认物理键（PhysicalKeyboardKey.usbHidUsage）
+  static int get kPhysicalKeyF => PhysicalKeyboardKey.keyF.usbHidUsage;
+  static int get kPhysicalKeyD => PhysicalKeyboardKey.keyD.usbHidUsage;
+  static int get kPhysicalKeyM => PhysicalKeyboardKey.keyM.usbHidUsage;
+  static int get kPhysicalKeyR => PhysicalKeyboardKey.keyR.usbHidUsage;
+  static int get kPhysicalKeyC => PhysicalKeyboardKey.keyC.usbHidUsage;
+  static int get kPhysicalKeyUp => PhysicalKeyboardKey.arrowUp.usbHidUsage;
+  static int get kPhysicalKeyDown => PhysicalKeyboardKey.arrowDown.usbHidUsage;
+  static int get kPhysicalKeyEnter => PhysicalKeyboardKey.enter.usbHidUsage;
+  static int get kPhysicalKeyEscape => PhysicalKeyboardKey.escape.usbHidUsage;
+  static int get kPhysicalKeyLeft => PhysicalKeyboardKey.arrowLeft.usbHidUsage;
+  static int get kPhysicalKeyRight => PhysicalKeyboardKey.arrowRight.usbHidUsage;
+
+  /// 物理键 usage 显示名（USB HID usage，与大小写/布局/输入法无关，release 下
+  /// Flutter 的 debugName 为空，故自定义映射表）
+  static String physicalKeyLabel(int usage) {
+    if (usage == kShortcutDisabled) return "未设置";
+    final int u = usage & 0x0000FFFF;
+    // 字母 A-Z: 0x04-0x1D
+    if (u >= 0x04 && u <= 0x1D) {
+      return String.fromCharCode(0x41 + u - 0x04);
+    }
+    // 数字 1-9: 0x1E-0x26；0: 0x27
+    if (u >= 0x1E && u <= 0x26) {
+      return String.fromCharCode(0x31 + u - 0x1E);
+    }
+    if (u == 0x27) return "0";
+    // F1-F12: 0x3A-0x45；F13-F24: 0x68-0x73
+    if (u >= 0x3A && u <= 0x45) return "F${u - 0x3A + 1}";
+    if (u >= 0x68 && u <= 0x73) return "F${u - 0x68 + 13}";
+    switch (u) {
       case 0x28:
+        return "Enter";
+      case 0x29:
+        return "Esc";
+      case 0x2A:
+        return "Backspace";
+      case 0x2B:
+        return "Tab";
+      case 0x2C:
+        return "Space";
+      case 0x4F:
+        return "→";
+      case 0x50:
+        return "←";
+      case 0x51:
         return "↓";
-      case 0x2D:
+      case 0x52:
+        return "↑";
+      case 0x49:
         return "Insert";
-      case 0x2E:
+      case 0x4A:
+        return "Home";
+      case 0x4B:
+        return "PageUp";
+      case 0x4C:
         return "Delete";
-      case 0x60:
-        return "NumPad0";
-      case 0x61:
-        return "NumPad1";
-      case 0x62:
-        return "NumPad2";
-      case 0x63:
-        return "NumPad3";
-      case 0x64:
-        return "NumPad4";
-      case 0x65:
-        return "NumPad5";
-      case 0x66:
-        return "NumPad6";
-      case 0x67:
-        return "NumPad7";
-      case 0x68:
-        return "NumPad8";
-      case 0x69:
-        return "NumPad9";
-      case 0x6A:
-        return "NumPad*";
-      case 0x6B:
-        return "NumPad+";
-      case 0x6D:
-        return "NumPad-";
-      case 0x6E:
-        return "NumPad.";
-      case 0x6F:
-        return "NumPad/";
-      case 0x90:
-        return "NumLock";
-      case 0x91:
-        return "ScrollLock";
-      case 0x14:
-        return "CapsLock";
-      case 0xBA:
-        return ";";
-      case 0xBB:
-        return "=";
-      case 0xBC:
-        return ",";
-      case 0xBD:
-        return "-";
-      case 0xBE:
-        return ".";
-      case 0xBF:
+      case 0x4D:
+        return "End";
+      case 0x4E:
+        return "PageDown";
+      case 0x58:
+        return "NumPadEnter";
+      case 0x54:
         return "/";
-      case 0xC0:
-        return "`";
-      case 0xDB:
-        return "[";
-      case 0xDC:
-        return "\\";
-      case 0xDD:
-        return "]";
-      case 0xDE:
-        return "'";
+      case 0x55:
+        return "*";
+      case 0x56:
+        return "-";
+      case 0x57:
+        return "+";
+      case 0x59:
+        return "NumPad1";
+      case 0x5A:
+        return "NumPad2";
+      case 0x5B:
+        return "NumPad3";
+      case 0x5C:
+        return "NumPad4";
+      case 0x5D:
+        return "NumPad5";
+      case 0x5E:
+        return "NumPad6";
+      case 0x5F:
+        return "NumPad7";
+      case 0x60:
+        return "NumPad8";
+      case 0x61:
+        return "NumPad9";
+      case 0x62:
+        return "NumPad0";
+      case 0x63:
+        return "NumPad.";
       default:
-        return "VK_${vk.toRadixString(16).toUpperCase()}";
+        return "KEY_0x${u.toRadixString(16).toUpperCase()}";
     }
   }
 
-  /// 是否为合法可绑定的 Windows 虚拟键码（排除修饰键自身）
-  static bool isValidShortcutVk(int vk) {
-    if (vk < 0x08 || vk > 0xFF) return false;
-    // 排除修饰键：Ctrl/Alt/Shift/Win 及其左右键
-    const excluded = {
-      0x10, 0x11, 0x12, 0x14, // Shift/Ctrl/Alt/CapsLock
-      0x5B, 0x5C, 0x5D, // 左Win/右Win/菜单键
-      0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, // 左右 Shift/Ctrl/Alt
+  /// 是否为合法可绑定的物理键（USB HID keyboard 页，排除修饰键自身）
+  static bool isValidShortcutPhysicalKey(int usage) {
+    if (usage <= 0) return false;
+    // 必须在 USB HID keyboard/consumer 页内（0x0007xxxx / 0x000Cxxxx）
+    final int page = usage & 0xFFFF0000;
+    if (page != 0x00070000 && page != 0x000C0000) return false;
+    // 排除修饰键：Ctrl/Alt/Shift/Win/Super/Fn/CapsLock（usbHidUsage 值）
+    const excluded = <int>{
+      0x000700e0, // controlLeft
+      0x000700e4, // controlRight
+      0x000700e1, // shiftLeft
+      0x000700e5, // shiftRight
+      0x000700e2, // altLeft
+      0x000700e6, // altRight
+      0x000700e3, // metaLeft
+      0x000700e7, // metaRight
+      0x00000011, // superKey
+      0x00000012, // fn
+      0x00070039, // capsLock
     };
-    return !excluded.contains(vk);
+    return !excluded.contains(usage);
   }
 
   /// 修饰键显示名
@@ -669,52 +679,44 @@ class AppSettingsController extends GetxController {
   }
 
   // ---------- 直播间快捷键配置 ----------
-  // 每个快捷键由 vk（Windows 虚拟键码，0=关闭）+ modifiers（修饰键掩码）组成
-  // 支持任意单键与组合键，键位完全可配置
+  // 每个快捷键由 physical usage（PhysicalKeyboardKey.usbHidUsage，物理键，
+  // 与大小写/CapsLock/Shift/键盘布局/输入法状态无关）+ modifiers（修饰键掩码）组成
+  // 键位完全可配置：任意单键与组合键，无固定键位白名单
 
-  /// Windows VK 常量
-  static const int kVkF = 0x46;
-  static const int kVkD = 0x44;
-  static const int kVkM = 0x4D;
-  static const int kVkR = 0x52;
-  static const int kVkC = 0x43;
-  static const int kVkUp = 0x26;
-  static const int kVkDown = 0x28;
-
-  var liveRoomShortcutFullScreen = kVkF.obs;
+  var liveRoomShortcutFullScreen = kPhysicalKeyF.obs;
   var liveRoomShortcutFullScreenModifiers = 0.obs;
 
-  var liveRoomShortcutDanmaku = kVkD.obs;
+  var liveRoomShortcutDanmaku = kPhysicalKeyD.obs;
   var liveRoomShortcutDanmakuModifiers = 0.obs;
 
-  var liveRoomShortcutMute = kVkM.obs;
+  var liveRoomShortcutMute = kPhysicalKeyM.obs;
   var liveRoomShortcutMuteModifiers = 0.obs;
 
-  var liveRoomShortcutRefresh = kVkR.obs;
+  var liveRoomShortcutRefresh = kPhysicalKeyR.obs;
   var liveRoomShortcutRefreshModifiers = 0.obs;
 
-  var liveRoomShortcutToggleChat = kVkC.obs;
+  var liveRoomShortcutToggleChat = kPhysicalKeyC.obs;
   var liveRoomShortcutToggleChatModifiers = 0.obs;
 
-  var liveRoomShortcutVolumeUp = kVkUp.obs;
+  var liveRoomShortcutVolumeUp = kPhysicalKeyUp.obs;
   var liveRoomShortcutVolumeUpModifiers = 0.obs;
 
-  var liveRoomShortcutVolumeDown = kVkDown.obs;
+  var liveRoomShortcutVolumeDown = kPhysicalKeyDown.obs;
   var liveRoomShortcutVolumeDownModifiers = 0.obs;
 
   /// 亮度+默认 Shift+↑
-  var liveRoomShortcutBrightnessUp = kVkUp.obs;
+  var liveRoomShortcutBrightnessUp = kPhysicalKeyUp.obs;
   var liveRoomShortcutBrightnessUpModifiers = kModifierShift.obs;
 
   /// 亮度-默认 Shift+↓
-  var liveRoomShortcutBrightnessDown = kVkDown.obs;
+  var liveRoomShortcutBrightnessDown = kPhysicalKeyDown.obs;
   var liveRoomShortcutBrightnessDownModifiers = kModifierShift.obs;
 
   /// 初始化直播间快捷键设置
   void initLiveRoomShortcutSettings() {
-    liveRoomShortcutFullScreen.value = _readLiveRoomShortcutVk(
+    liveRoomShortcutFullScreen.value = _readLiveRoomShortcutPhysical(
       LocalStorageService.kLiveRoomShortcutFullScreen,
-      kVkF,
+      kPhysicalKeyF,
     );
     liveRoomShortcutFullScreenModifiers.value =
         LocalStorageService.instance.getValue(
@@ -722,9 +724,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutDanmaku.value = _readLiveRoomShortcutVk(
+    liveRoomShortcutDanmaku.value = _readLiveRoomShortcutPhysical(
       LocalStorageService.kLiveRoomShortcutDanmaku,
-      kVkD,
+      kPhysicalKeyD,
     );
     liveRoomShortcutDanmakuModifiers.value =
         LocalStorageService.instance.getValue(
@@ -732,9 +734,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutMute.value = _readLiveRoomShortcutVk(
+    liveRoomShortcutMute.value = _readLiveRoomShortcutPhysical(
       LocalStorageService.kLiveRoomShortcutMute,
-      kVkM,
+      kPhysicalKeyM,
     );
     liveRoomShortcutMuteModifiers.value =
         LocalStorageService.instance.getValue(
@@ -742,9 +744,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutRefresh.value = _readLiveRoomShortcutVk(
+    liveRoomShortcutRefresh.value = _readLiveRoomShortcutPhysical(
       LocalStorageService.kLiveRoomShortcutRefresh,
-      kVkR,
+      kPhysicalKeyR,
     );
     liveRoomShortcutRefreshModifiers.value =
         LocalStorageService.instance.getValue(
@@ -752,9 +754,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutToggleChat.value = _readLiveRoomShortcutVk(
+    liveRoomShortcutToggleChat.value = _readLiveRoomShortcutPhysical(
       LocalStorageService.kLiveRoomShortcutToggleChat,
-      kVkC,
+      kPhysicalKeyC,
     );
     liveRoomShortcutToggleChatModifiers.value =
         LocalStorageService.instance.getValue(
@@ -762,9 +764,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutVolumeUp.value = _readLiveRoomShortcutVk(
+    liveRoomShortcutVolumeUp.value = _readLiveRoomShortcutPhysical(
       LocalStorageService.kLiveRoomShortcutVolumeUp,
-      kVkUp,
+      kPhysicalKeyUp,
     );
     liveRoomShortcutVolumeUpModifiers.value =
         LocalStorageService.instance.getValue(
@@ -772,9 +774,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutVolumeDown.value = _readLiveRoomShortcutVk(
+    liveRoomShortcutVolumeDown.value = _readLiveRoomShortcutPhysical(
       LocalStorageService.kLiveRoomShortcutVolumeDown,
-      kVkDown,
+      kPhysicalKeyDown,
     );
     liveRoomShortcutVolumeDownModifiers.value =
         LocalStorageService.instance.getValue(
@@ -782,9 +784,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutBrightnessUp.value = _readLiveRoomShortcutVk(
+    liveRoomShortcutBrightnessUp.value = _readLiveRoomShortcutPhysical(
       LocalStorageService.kLiveRoomShortcutBrightnessUp,
-      kVkUp,
+      kPhysicalKeyUp,
     );
     liveRoomShortcutBrightnessUpModifiers.value =
         LocalStorageService.instance.getValue(
@@ -792,9 +794,9 @@ class AppSettingsController extends GetxController {
       kModifierShift,
     );
 
-    liveRoomShortcutBrightnessDown.value = _readLiveRoomShortcutVk(
+    liveRoomShortcutBrightnessDown.value = _readLiveRoomShortcutPhysical(
       LocalStorageService.kLiveRoomShortcutBrightnessDown,
-      kVkDown,
+      kPhysicalKeyDown,
     );
     liveRoomShortcutBrightnessDownModifiers.value =
         LocalStorageService.instance.getValue(
@@ -803,20 +805,117 @@ class AppSettingsController extends GetxController {
     );
   }
 
-  /// 校验快捷键 VK 是否合法，不合法回退为关闭
-  int _normalizeLiveRoomShortcut(int vk) {
-    return isValidShortcutVk(vk) ? vk : kShortcutDisabled;
+  /// 校验快捷键 physical usage 是否合法，不合法回退为关闭
+  int _normalizeLiveRoomShortcut(int usage) {
+    return isValidShortcutPhysicalKey(usage) ? usage : kShortcutDisabled;
   }
 
-  /// 兼容读取：旧版存储格式为 LogicalKeyboardKey.keyId（>0xFF 的大整数），
-  /// 其低 8 位即 Windows VK 码；新版直接存 VK 码。
-  int _readLiveRoomShortcutVk(String storageKey, int defaultValue) {
+  /// 兼容读取：存储里可能是本版 physical usage、上一版 Windows VK 码、
+  /// 或更早版 LogicalKeyboardKey.keyId，统一迁移为 physical usage。
+  int _readLiveRoomShortcutPhysical(String storageKey, int defaultValue) {
     final stored =
         LocalStorageService.instance.getValue(storageKey, defaultValue);
-    if (stored > 0xFF) {
-      return _normalizeLiveRoomShortcut(stored & 0xFF);
+    if (stored <= 0) {
+      return kShortcutDisabled;
     }
-    return _normalizeLiveRoomShortcut(stored);
+    if (isValidShortcutPhysicalKey(stored)) {
+      return stored;
+    }
+    final int? migrated = _legacyToPhysical(stored);
+    if (migrated != null) {
+      return migrated;
+    }
+    return defaultValue;
+  }
+
+  /// 旧值（VK 码 / LogicalKeyboardKey.keyId）→ PhysicalKeyboardKey.usbHidUsage
+  static int? _legacyToPhysical(int legacy) {
+    if (legacy <= 0) return null;
+    // 已经是 physical usage（0x0007xxxx）
+    if ((legacy & 0xFFFF0000) == 0x00070000) {
+      return legacy;
+    }
+    // LogicalKeyboardKey 字母 keyId（0x61-0x7A）或 VK 字母（0x41-0x5A）
+    final int letter = legacy & 0xFF;
+    if (letter >= 0x41 && letter <= 0x5A) {
+      return PhysicalKeyboardKey.keyA.usbHidUsage + (letter - 0x41);
+    }
+    if (letter >= 0x61 && letter <= 0x7A) {
+      return PhysicalKeyboardKey.keyA.usbHidUsage + (letter - 0x61);
+    }
+    // LogicalKeyboardKey 数字 keyId / VK 数字（0x30-0x39）
+    if (letter >= 0x30 && letter <= 0x39) {
+      return PhysicalKeyboardKey.digit0.usbHidUsage -
+          (letter == 0x30 ? 0 : (0x31 - letter)); // digit0=0x27, digit1=0x1e...
+    }
+    // VK F1-F24（0x70-0x87）
+    if (legacy >= 0x70 && legacy <= 0x7B) {
+      return PhysicalKeyboardKey.f1.usbHidUsage + (legacy - 0x70);
+    }
+    if (legacy >= 0x7C && legacy <= 0x87) {
+      return 0x00070068 + (legacy - 0x7C);
+    }
+    // LogicalKeyboardKey 功能键 keyId（0x00100000801..0x818）
+    if (legacy >= 0x00100000801 && legacy <= 0x00100000818) {
+      return 0x0007003A + (legacy - 0x00100000801);
+    }
+    // 方向键/编辑键（VK 或 LogicalKeyboardKey keyId）
+    switch (legacy) {
+      // LogicalKeyboardKey keyId
+      case 0x00100000302:
+        return PhysicalKeyboardKey.arrowLeft.usbHidUsage;
+      case 0x00100000304:
+        return PhysicalKeyboardKey.arrowUp.usbHidUsage;
+      case 0x00100000303:
+        return PhysicalKeyboardKey.arrowRight.usbHidUsage;
+      case 0x00100000301:
+        return PhysicalKeyboardKey.arrowDown.usbHidUsage;
+      case 0x0010000000d:
+        return PhysicalKeyboardKey.enter.usbHidUsage;
+      case 0x0010000001b:
+        return PhysicalKeyboardKey.escape.usbHidUsage;
+      case 0x00100000008:
+        return PhysicalKeyboardKey.backspace.usbHidUsage;
+      case 0x00100000308:
+        return PhysicalKeyboardKey.pageUp.usbHidUsage;
+      case 0x00100000307:
+        return PhysicalKeyboardKey.pageDown.usbHidUsage;
+      case 0x00100000306:
+        return PhysicalKeyboardKey.home.usbHidUsage;
+      case 0x00100000305:
+        return PhysicalKeyboardKey.end.usbHidUsage;
+      // VK 码
+      case 0x25:
+        return PhysicalKeyboardKey.arrowLeft.usbHidUsage;
+      case 0x26:
+        return PhysicalKeyboardKey.arrowUp.usbHidUsage;
+      case 0x27:
+        return PhysicalKeyboardKey.arrowRight.usbHidUsage;
+      case 0x28:
+        return PhysicalKeyboardKey.arrowDown.usbHidUsage;
+      case 0x0D:
+        return PhysicalKeyboardKey.enter.usbHidUsage;
+      case 0x1B:
+        return PhysicalKeyboardKey.escape.usbHidUsage;
+      case 0x08:
+        return PhysicalKeyboardKey.backspace.usbHidUsage;
+      case 0x21:
+        return PhysicalKeyboardKey.pageUp.usbHidUsage;
+      case 0x22:
+        return PhysicalKeyboardKey.pageDown.usbHidUsage;
+      case 0x24:
+        return PhysicalKeyboardKey.home.usbHidUsage;
+      case 0x23:
+        return PhysicalKeyboardKey.end.usbHidUsage;
+      case 0x20:
+        return PhysicalKeyboardKey.space.usbHidUsage;
+      case 0x2D:
+        return PhysicalKeyboardKey.insert.usbHidUsage;
+      case 0x2E:
+        return PhysicalKeyboardKey.delete.usbHidUsage;
+      default:
+        return null;
+    }
   }
 
   /// 所有快捷键动作名称（用于冲突提示）

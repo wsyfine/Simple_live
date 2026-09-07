@@ -11,6 +11,7 @@ class SpecialDanmakuPainter extends CustomPainter {
   final double fontSize;
   final int fontWeight;
   final String? fontFamily;
+  final List<String>? fontFamilyFallback;
   final bool running;
   final int tick;
   final int batchThreshold;
@@ -21,6 +22,7 @@ class SpecialDanmakuPainter extends CustomPainter {
     this.fontSize,
     this.fontWeight,
     this.fontFamily,
+    this.fontFamilyFallback,
     this.running,
     this.tick, {
     this.batchThreshold = 10, // 默认值为10，可以自行调整
@@ -69,6 +71,7 @@ class SpecialDanmakuPainter extends CustomPainter {
           fontSize: item.fontSize,
           fontWeight: FontWeight.values[fontWeight],
           fontFamily: fontFamily,
+          fontFamilyFallback: fontFamilyFallback,
           shadows: item.hasStroke
               ? [Shadow(color: Colors.black.withOpacity(alpha), blurRadius: 2)]
               : null,

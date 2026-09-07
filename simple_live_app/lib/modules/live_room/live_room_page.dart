@@ -36,9 +36,6 @@ class LiveRoomPage extends StatefulWidget {
 class _LiveRoomPageState extends State<LiveRoomPage> {
   LiveRoomController get controller => Get.find<LiveRoomController>();
 
-  /// 桌面端快捷键兜底监听焦点节点（复用，避免每次 build 重建抢焦点）
-  final FocusNode _desktopKeysFocusNode = FocusNode();
-
   @override
   void initState() {
     super.initState();
@@ -46,7 +43,6 @@ class _LiveRoomPageState extends State<LiveRoomPage> {
 
   @override
   void dispose() {
-    _desktopKeysFocusNode.dispose();
     super.dispose();
   }
 
@@ -124,42 +120,10 @@ class _LiveRoomPageState extends State<LiveRoomPage> {
       },
     );
     if (!Platform.isAndroid && !Platform.isIOS) {
-      // 桌面端快捷键（音量/亮度/F/D/M/R/C 等由原生层捕获统一处理）
-      // 此处仅保留未被原生层捕获的按键：Enter 全屏、←/→ 切换直播间
-      return KeyboardListener(
-        autofocus: true,
-        focusNode: _desktopKeysFocusNode,
-        onKeyEvent: (KeyEvent event) {
-          // 输入法组合输入中不响应快捷键（防止与中文输入法冲突）
-          if (event is KeyDownEvent &&
-              FocusManager.instance.primaryFocus?.context
-                      ?.findAncestorWidgetOfExactType<EditableText>() !=
-                  null) {
-            return;
-          }
-          // 回车全屏/退出全屏（仅首次按下，不响应长按重复）
-          if (event is KeyDownEvent &&
-              event.logicalKey == LogicalKeyboardKey.enter) {
-            if (controller.fullScreenState.value) {
-              controller.exitFull();
-            } else {
-              controller.enterFullScreen();
-            }
-            return;
-          }
-          // 左右键切换关注的直播间（仅首次按下）
-          if (event is KeyDownEvent) {
-            if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
-              controller.switchToPrevLive();
-              return;
-            } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
-              controller.switchToNextLive();
-              return;
-            }
-          }
-        },
-        child: page,
-      );
+      // 桌面端快捷键统一由 DesktopShortcutManager(HardwareKeyboard 全局 handler)
+      // 分发（含 Enter 全屏、←/→ 切换、Esc 退全屏、配置动作），此处不再挂
+      // KeyboardListener，避免焦点竞争导致快捷键失效。
+      return page;
     }
     if (!Platform.isAndroid) {
       return page;

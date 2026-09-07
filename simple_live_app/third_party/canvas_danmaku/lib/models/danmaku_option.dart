@@ -8,6 +8,10 @@ class DanmakuOption {
   /// 字体族
   final String? fontFamily;
 
+  /// 字体回退链（缺字形时依次回退）。用于修复 Windows 上 emoji/生僻字/特殊符号
+  /// 渲染成豆腐块乱码的问题。
+  final List<String>? fontFamilyFallback;
+
   /// 显示区域，0.1-1.0
   final double area;
 
@@ -47,6 +51,7 @@ class DanmakuOption {
     this.fontSize = 16,
     this.fontWeight = 4,
     this.fontFamily,
+    this.fontFamilyFallback,
     this.area = 1.0,
     this.lineHeight = 1.0,
     this.emojiScale = 1.25,
@@ -65,6 +70,7 @@ class DanmakuOption {
     double? fontSize,
     int? fontWeight,
     String? fontFamily,
+    List<String>? fontFamilyFallback,
     double? area,
     double? lineHeight,
     double? emojiScale,
@@ -85,6 +91,7 @@ class DanmakuOption {
       fontSize: fontSize ?? this.fontSize,
       fontWeight: fontWeight ?? this.fontWeight,
       fontFamily: fontFamily ?? this.fontFamily,
+      fontFamilyFallback: fontFamilyFallback ?? this.fontFamilyFallback,
       duration: duration ?? this.duration,
       opacity: opacity ?? this.opacity,
       hideTop: hideTop ?? this.hideTop,

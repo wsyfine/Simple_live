@@ -11,6 +11,7 @@ class StaticDanmakuPainter extends CustomPainter {
   final double fontSize;
   final int fontWeight;
   final String? fontFamily;
+  final List<String>? fontFamilyFallback;
   final bool showStroke;
   final double danmakuHeight;
   final bool running;
@@ -29,6 +30,7 @@ class StaticDanmakuPainter extends CustomPainter {
     this.fontSize,
     this.fontWeight,
     this.fontFamily,
+    this.fontFamilyFallback,
     this.showStroke,
     this.danmakuHeight,
     this.running,
@@ -49,6 +51,7 @@ class StaticDanmakuPainter extends CustomPainter {
         fontWeight,
         1.25,
         fontFamily,
+        fontFamilyFallback,
       );
 
       // 黑色部分
@@ -60,6 +63,7 @@ class StaticDanmakuPainter extends CustomPainter {
           fontWeight,
           1.25,
           fontFamily,
+          fontFamilyFallback,
         );
 
         if (item.strokeParagraph != null) {
@@ -99,6 +103,7 @@ class StaticDanmakuPainter extends CustomPainter {
         fontWeight,
         1.25,
         fontFamily,
+        fontFamilyFallback,
       );
 
       // 黑色部分
@@ -110,6 +115,7 @@ class StaticDanmakuPainter extends CustomPainter {
           fontWeight,
           1.25,
           fontFamily,
+          fontFamilyFallback,
         );
 
         if (item.strokeParagraph != null) {

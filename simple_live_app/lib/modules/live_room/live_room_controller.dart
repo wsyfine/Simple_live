@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_smart_dialog/flutter_smart_dialog.dart';
 import 'package:get/get.dart';
 import 'package:media_kit/media_kit.dart';
@@ -29,6 +30,7 @@ import 'package:simple_live_core/simple_live_core.dart';
 import 'package:url_launcher/url_launcher_string.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:screen_brightness/screen_brightness.dart';
+import 'package:window_manager/window_manager.dart';
 
 class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   final Site pSite;
@@ -103,7 +105,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
 
   /// 直播间加载失败
   var loadError = false.obs;
-  Error? error;
+  Object? error;
 
   // 开播时长状态变量
   var liveDuration = "00:00:00".obs;
@@ -160,7 +162,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
       if (countdown.value <= 0) {
         timer = Timer(const Duration(seconds: 10), () async {
           await WakelockPlus.disable();
-          exit(0);
+          await exitApp();
         });
         autoExitTimer?.cancel();
         var delay = await Utils.showAlertDialog("定时关闭已到时,是否延迟关闭?",
@@ -173,17 +175,42 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
         } else {
           delayAutoExit.value = false;
           await WakelockPlus.disable();
-          exit(0);
+          await exitApp();
         }
       }
     });
   }
   // 弹窗逻辑
 
-  void refreshRoom() {
+  /// 退出应用：Windows/Linux/macOS 桌面端优先优雅关闭窗口，
+  /// 让 Flutter 引擎与媒体库走正常生命周期完成资源清理，避免直接
+  /// exit(0) 进程级终止触发 Windows hard error；
+  /// 其他平台保持原有行为。
+  Future<void> exitApp() async {
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      try {
+        // 注意：不要在 destroy 前手动 player.dispose()——
+        // media_kit 的 dispose 非幂等，窗口销毁走 Get 生命周期
+        // onClose 时会再次释放，重复调用会抛 AssertionError
+        await windowManager.destroy();
+        return;
+      } catch (e) {
+        Log.logPrint(e);
+      }
+    }
+    exit(0);
+  }
+
+  Future<void> refreshRoom() async {
     //messages.clear();
     superChats.clear();
-    liveDanmaku.stop();
+    // 等待旧弹幕连接完全断开，避免与 loadData 中重新 start 的
+    // 新连接并发，导致抖音等站点弹幕 WebSocket 出现竞态崩溃
+    try {
+      await liveDanmaku.stop();
+    } catch (e) {
+      Log.logPrint(e);
+    }
 
     loadData();
   }
@@ -340,7 +367,10 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
       Log.logPrint(e);
       //SmartDialog.showToast(e.toString());
       loadError.value = true;
-      error = e as Error;
+      // 直接保存原始异常对象，避免 Error/Object 类型强转失败
+      // （抖音接口抛出的多为 Exception，`e as Error` 会在 catch 内部再抛
+      //  TypeError，导致刷新直播间直接崩溃）
+      error = e;
     } finally {
       SmartDialog.dismiss(status: SmartStatus.loading);
     }
@@ -475,7 +505,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   int mediaErrorRetryCount = 0;
   @override
   void mediaError(String error) async {
-    super.mediaEnd();
+    super.mediaError(error);
     if (mediaErrorRetryCount < 2) {
       Log.d("播放失败，尝试第${mediaErrorRetryCount + 1}次刷新");
       if (mediaErrorRetryCount == 1) {
@@ -762,100 +792,110 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   }
 
   /// 桌面快捷键分发（由 DesktopShortcutManager 回调，配置驱动匹配任意键位）
-  void dispatchDesktopShortcut(
-      int keyCode, int scanCode, int modifiers, bool isRepeat) {
+  /// physicalUsage 为 PhysicalKeyboardKey.usbHidUsage
+  /// 返回 true 表示该按键命中并消费（阻止继续传播）
+  bool dispatchDesktopShortcut(
+      int physicalUsage, int modifiers, bool isRepeat) {
     // 内置按键（不参与自定义配置）：Enter 全屏、←/→ 切换直播间、Esc 退出全屏
-    // 原生层在捕获开启时会消费全部按键，原 KeyboardListener 无法收到，故在此处理
-    if (keyCode == 0x1B) { // Esc
-      if (isRepeat) return;
+    if (physicalUsage == PhysicalKeyboardKey.escape.usbHidUsage) {
+      if (isRepeat) return false;
+      if (smallWindowState.value) {
+        // 小窗模式优先退出小窗，避免误触全屏退出破坏窗口尺寸
+        exitSmallWindow();
+        return true;
+      }
       if (fullScreenState.value) {
         exitFull();
+        return true;
       }
-      return;
+      // 直播间非全屏态：不消费，放行给窗口级 ESC（windowManager 全屏退出）
+      return false;
     }
-    if (keyCode == 0x0D) { // Enter
-      if (isRepeat) return;
+    if (physicalUsage == PhysicalKeyboardKey.enter.usbHidUsage ||
+        physicalUsage == PhysicalKeyboardKey.numpadEnter.usbHidUsage) {
+      if (isRepeat) return false;
       if (fullScreenState.value) {
         exitFull();
       } else {
         enterFullScreen();
       }
-      return;
+      return true;
     }
-    if (keyCode == 0x25) { // ←
-      if (isRepeat) return;
+    if (physicalUsage == PhysicalKeyboardKey.arrowLeft.usbHidUsage) {
+      if (isRepeat) return false;
       switchToPrevLive();
-      return;
+      return true;
     }
-    if (keyCode == 0x27) { // →
-      if (isRepeat) return;
+    if (physicalUsage == PhysicalKeyboardKey.arrowRight.usbHidUsage) {
+      if (isRepeat) return false;
       switchToNextLive();
-      return;
+      return true;
     }
 
     final settings = AppSettingsController.instance;
 
-    bool matches(int shortcutVk, int shortcutModifiers) {
-      if (shortcutVk == AppSettingsController.kShortcutDisabled) {
+    bool matches(int shortcutUsage, int shortcutModifiers) {
+      if (shortcutUsage == AppSettingsController.kShortcutDisabled) {
         return false;
       }
-      return shortcutVk == keyCode && shortcutModifiers == modifiers;
+      return shortcutUsage == physicalUsage && shortcutModifiers == modifiers;
     }
 
     if (matches(settings.liveRoomShortcutFullScreen.value,
         settings.liveRoomShortcutFullScreenModifiers.value)) {
-      if (isRepeat) return; // 切换类动作忽略长按重复
+      if (isRepeat) return true; // 切换类动作忽略长按重复
       if (fullScreenState.value) {
         exitFull();
       } else {
         enterFullScreen();
       }
-      return;
+      return true;
     }
     if (matches(settings.liveRoomShortcutDanmaku.value,
         settings.liveRoomShortcutDanmakuModifiers.value)) {
-      if (isRepeat) return;
+      if (isRepeat) return true;
       showDanmakuState.value = !showDanmakuState.value;
-      return;
+      return true;
     }
     if (matches(settings.liveRoomShortcutMute.value,
         settings.liveRoomShortcutMuteModifiers.value)) {
-      if (isRepeat) return;
+      if (isRepeat) return true;
       toggleMute();
-      return;
+      return true;
     }
     if (matches(settings.liveRoomShortcutVolumeUp.value,
         settings.liveRoomShortcutVolumeUpModifiers.value)) {
       adjustVolume(5);
-      return;
+      return true;
     }
     if (matches(settings.liveRoomShortcutVolumeDown.value,
         settings.liveRoomShortcutVolumeDownModifiers.value)) {
       adjustVolume(-5);
-      return;
+      return true;
     }
     if (matches(settings.liveRoomShortcutRefresh.value,
         settings.liveRoomShortcutRefreshModifiers.value)) {
-      if (isRepeat) return;
+      if (isRepeat) return true;
       refreshRoom();
-      return;
+      return true;
     }
     if (matches(settings.liveRoomShortcutToggleChat.value,
         settings.liveRoomShortcutToggleChatModifiers.value)) {
-      if (isRepeat) return;
+      if (isRepeat) return true;
       toggleChatShowState();
-      return;
+      return true;
     }
     if (matches(settings.liveRoomShortcutBrightnessUp.value,
         settings.liveRoomShortcutBrightnessUpModifiers.value)) {
       adjustBrightness(1);
-      return;
+      return true;
     }
     if (matches(settings.liveRoomShortcutBrightnessDown.value,
         settings.liveRoomShortcutBrightnessDownModifiers.value)) {
       adjustBrightness(-1);
-      return;
+      return true;
     }
+    return false;
   }
 
   /// 切换到下一个关注的直播间（右方向键）
@@ -1242,12 +1282,14 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   }
 
   void copyErrorDetail() {
+    // error 可能是任意异常对象（Error 或 Exception），stackTrace 仅在 Error 上可用
+    final stackTrace = error is Error ? (error! as Error).stackTrace : "无堆栈信息";
     Utils.copyToClipboard('''直播平台：${rxSite.value.name}
 房间号：${rxRoomId.value}
 错误信息：
 ${error?.toString()}
 ----------------
-${error?.stackTrace}''');
+$stackTrace''');
     SmartDialog.showToast("已复制错误信息");
   }
 

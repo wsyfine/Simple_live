@@ -657,6 +657,18 @@ Widget buildDanmuView(VideoState videoState, LiveRoomController controller) {
       opacity: AppSettingsController.instance.danmuOpacity.value,
       //strokeWidth: AppSettingsController.instance.danmuStrokeWidth.value,
       fontWeight: AppSettingsController.instance.danmuFontWeight.value,
+      // Windows：主字体微软雅黑，回退链覆盖中文 emoji 与符号，修复字体回退乱码
+      fontFamily: Platform.isWindows ? "Microsoft YaHei" : null,
+      fontFamilyFallback: Platform.isWindows
+          ? const [
+              "Microsoft YaHei",
+              "Microsoft YaHei UI",
+              "Segoe UI",
+              "Segoe UI Emoji",
+              "Segoe UI Symbol",
+              "Arial",
+            ]
+          : null,
     ),
   );
   return Positioned.fill(
