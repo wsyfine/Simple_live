@@ -1,6 +1,5 @@
 import 'dart:io';
 
-import 'package:flutter/services.dart';
 import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/sites.dart';
@@ -23,23 +22,117 @@ class AppSettingsController extends GetxController {
   static const int kModifierShift = 4;
   static const int kModifierWin = 8;
 
-  /// 直播间快捷键可选项（keyId -> 显示名）
-  static final Map<int, String> liveRoomShortcutOptions = {
-    kShortcutDisabled: "关闭",
-    LogicalKeyboardKey.keyF.keyId: "F",
-    LogicalKeyboardKey.keyD.keyId: "D",
-    LogicalKeyboardKey.keyM.keyId: "M",
-    LogicalKeyboardKey.keyR.keyId: "R",
-    LogicalKeyboardKey.keyC.keyId: "C",
-    LogicalKeyboardKey.keyQ.keyId: "Q",
-    LogicalKeyboardKey.keyE.keyId: "E",
-    LogicalKeyboardKey.keyT.keyId: "T",
-    LogicalKeyboardKey.keyG.keyId: "G",
-    LogicalKeyboardKey.keyB.keyId: "B",
-    LogicalKeyboardKey.keyN.keyId: "N",
-    LogicalKeyboardKey.arrowUp.keyId: "↑",
-    LogicalKeyboardKey.arrowDown.keyId: "↓",
-  };
+  /// Windows 虚拟键码（VK）名称表（设置界面显示用）
+  static String windowsVkLabel(int vk) {
+    if (vk >= 0x41 && vk <= 0x5A) return String.fromCharCode(vk);
+    if (vk >= 0x30 && vk <= 0x39) return String.fromCharCode(vk);
+    if (vk >= 0x70 && vk <= 0x7A) return "F${vk - 0x70 + 1}";
+    if (vk >= 0x7B && vk <= 0x87) return "F${vk - 0x70 + 1}";
+    switch (vk) {
+      case 0x08:
+        return "Backspace";
+      case 0x09:
+        return "Tab";
+      case 0x0D:
+        return "Enter";
+      case 0x1B:
+        return "Esc";
+      case 0x20:
+        return "Space";
+      case 0x21:
+        return "PageUp";
+      case 0x22:
+        return "PageDown";
+      case 0x23:
+        return "End";
+      case 0x24:
+        return "Home";
+      case 0x25:
+        return "←";
+      case 0x26:
+        return "↑";
+      case 0x27:
+        return "→";
+      case 0x28:
+        return "↓";
+      case 0x2D:
+        return "Insert";
+      case 0x2E:
+        return "Delete";
+      case 0x60:
+        return "NumPad0";
+      case 0x61:
+        return "NumPad1";
+      case 0x62:
+        return "NumPad2";
+      case 0x63:
+        return "NumPad3";
+      case 0x64:
+        return "NumPad4";
+      case 0x65:
+        return "NumPad5";
+      case 0x66:
+        return "NumPad6";
+      case 0x67:
+        return "NumPad7";
+      case 0x68:
+        return "NumPad8";
+      case 0x69:
+        return "NumPad9";
+      case 0x6A:
+        return "NumPad*";
+      case 0x6B:
+        return "NumPad+";
+      case 0x6D:
+        return "NumPad-";
+      case 0x6E:
+        return "NumPad.";
+      case 0x6F:
+        return "NumPad/";
+      case 0x90:
+        return "NumLock";
+      case 0x91:
+        return "ScrollLock";
+      case 0x14:
+        return "CapsLock";
+      case 0xBA:
+        return ";";
+      case 0xBB:
+        return "=";
+      case 0xBC:
+        return ",";
+      case 0xBD:
+        return "-";
+      case 0xBE:
+        return ".";
+      case 0xBF:
+        return "/";
+      case 0xC0:
+        return "`";
+      case 0xDB:
+        return "[";
+      case 0xDC:
+        return "\\";
+      case 0xDD:
+        return "]";
+      case 0xDE:
+        return "'";
+      default:
+        return "VK_${vk.toRadixString(16).toUpperCase()}";
+    }
+  }
+
+  /// 是否为合法可绑定的 Windows 虚拟键码（排除修饰键自身）
+  static bool isValidShortcutVk(int vk) {
+    if (vk < 0x08 || vk > 0xFF) return false;
+    // 排除修饰键：Ctrl/Alt/Shift/Win 及其左右键
+    const excluded = {
+      0x10, 0x11, 0x12, 0x14, // Shift/Ctrl/Alt/CapsLock
+      0x5B, 0x5C, 0x5D, // 左Win/右Win/菜单键
+      0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, // 左右 Shift/Ctrl/Alt
+    };
+    return !excluded.contains(vk);
+  }
 
   /// 修饰键显示名
   static String modifierLabel(int modifiers) {
@@ -576,48 +669,52 @@ class AppSettingsController extends GetxController {
   }
 
   // ---------- 直播间快捷键配置 ----------
-  // 每个快捷键由 keyId + modifiers（修饰键掩码）组成
+  // 每个快捷键由 vk（Windows 虚拟键码，0=关闭）+ modifiers（修饰键掩码）组成
+  // 支持任意单键与组合键，键位完全可配置
 
-  var liveRoomShortcutFullScreen = LogicalKeyboardKey.keyF.keyId.obs;
+  /// Windows VK 常量
+  static const int kVkF = 0x46;
+  static const int kVkD = 0x44;
+  static const int kVkM = 0x4D;
+  static const int kVkR = 0x52;
+  static const int kVkC = 0x43;
+  static const int kVkUp = 0x26;
+  static const int kVkDown = 0x28;
+
+  var liveRoomShortcutFullScreen = kVkF.obs;
   var liveRoomShortcutFullScreenModifiers = 0.obs;
 
-  var liveRoomShortcutDanmaku = LogicalKeyboardKey.keyD.keyId.obs;
+  var liveRoomShortcutDanmaku = kVkD.obs;
   var liveRoomShortcutDanmakuModifiers = 0.obs;
 
-  var liveRoomShortcutMute = LogicalKeyboardKey.keyM.keyId.obs;
+  var liveRoomShortcutMute = kVkM.obs;
   var liveRoomShortcutMuteModifiers = 0.obs;
 
-  var liveRoomShortcutRefresh = LogicalKeyboardKey.keyR.keyId.obs;
+  var liveRoomShortcutRefresh = kVkR.obs;
   var liveRoomShortcutRefreshModifiers = 0.obs;
 
-  var liveRoomShortcutToggleChat = LogicalKeyboardKey.keyC.keyId.obs;
+  var liveRoomShortcutToggleChat = kVkC.obs;
   var liveRoomShortcutToggleChatModifiers = 0.obs;
 
-  var liveRoomShortcutVolumeUp = LogicalKeyboardKey.arrowUp.keyId.obs;
+  var liveRoomShortcutVolumeUp = kVkUp.obs;
   var liveRoomShortcutVolumeUpModifiers = 0.obs;
 
-  var liveRoomShortcutVolumeDown = LogicalKeyboardKey.arrowDown.keyId.obs;
+  var liveRoomShortcutVolumeDown = kVkDown.obs;
   var liveRoomShortcutVolumeDownModifiers = 0.obs;
 
-  var liveRoomShortcutBrightnessUp =
-      LogicalKeyboardKey.arrowUp.keyId.obs;
-
   /// 亮度+默认 Shift+↑
+  var liveRoomShortcutBrightnessUp = kVkUp.obs;
   var liveRoomShortcutBrightnessUpModifiers = kModifierShift.obs;
 
-  var liveRoomShortcutBrightnessDown =
-      LogicalKeyboardKey.arrowDown.keyId.obs;
-
   /// 亮度-默认 Shift+↓
+  var liveRoomShortcutBrightnessDown = kVkDown.obs;
   var liveRoomShortcutBrightnessDownModifiers = kModifierShift.obs;
 
   /// 初始化直播间快捷键设置
   void initLiveRoomShortcutSettings() {
-    liveRoomShortcutFullScreen.value = _normalizeLiveRoomShortcut(
-      LocalStorageService.instance.getValue(
-        LocalStorageService.kLiveRoomShortcutFullScreen,
-        LogicalKeyboardKey.keyF.keyId,
-      ),
+    liveRoomShortcutFullScreen.value = _readLiveRoomShortcutVk(
+      LocalStorageService.kLiveRoomShortcutFullScreen,
+      kVkF,
     );
     liveRoomShortcutFullScreenModifiers.value =
         LocalStorageService.instance.getValue(
@@ -625,11 +722,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutDanmaku.value = _normalizeLiveRoomShortcut(
-      LocalStorageService.instance.getValue(
-        LocalStorageService.kLiveRoomShortcutDanmaku,
-        LogicalKeyboardKey.keyD.keyId,
-      ),
+    liveRoomShortcutDanmaku.value = _readLiveRoomShortcutVk(
+      LocalStorageService.kLiveRoomShortcutDanmaku,
+      kVkD,
     );
     liveRoomShortcutDanmakuModifiers.value =
         LocalStorageService.instance.getValue(
@@ -637,11 +732,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutMute.value = _normalizeLiveRoomShortcut(
-      LocalStorageService.instance.getValue(
-        LocalStorageService.kLiveRoomShortcutMute,
-        LogicalKeyboardKey.keyM.keyId,
-      ),
+    liveRoomShortcutMute.value = _readLiveRoomShortcutVk(
+      LocalStorageService.kLiveRoomShortcutMute,
+      kVkM,
     );
     liveRoomShortcutMuteModifiers.value =
         LocalStorageService.instance.getValue(
@@ -649,11 +742,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutRefresh.value = _normalizeLiveRoomShortcut(
-      LocalStorageService.instance.getValue(
-        LocalStorageService.kLiveRoomShortcutRefresh,
-        LogicalKeyboardKey.keyR.keyId,
-      ),
+    liveRoomShortcutRefresh.value = _readLiveRoomShortcutVk(
+      LocalStorageService.kLiveRoomShortcutRefresh,
+      kVkR,
     );
     liveRoomShortcutRefreshModifiers.value =
         LocalStorageService.instance.getValue(
@@ -661,11 +752,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutToggleChat.value = _normalizeLiveRoomShortcut(
-      LocalStorageService.instance.getValue(
-        LocalStorageService.kLiveRoomShortcutToggleChat,
-        LogicalKeyboardKey.keyC.keyId,
-      ),
+    liveRoomShortcutToggleChat.value = _readLiveRoomShortcutVk(
+      LocalStorageService.kLiveRoomShortcutToggleChat,
+      kVkC,
     );
     liveRoomShortcutToggleChatModifiers.value =
         LocalStorageService.instance.getValue(
@@ -673,11 +762,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutVolumeUp.value = _normalizeLiveRoomShortcut(
-      LocalStorageService.instance.getValue(
-        LocalStorageService.kLiveRoomShortcutVolumeUp,
-        LogicalKeyboardKey.arrowUp.keyId,
-      ),
+    liveRoomShortcutVolumeUp.value = _readLiveRoomShortcutVk(
+      LocalStorageService.kLiveRoomShortcutVolumeUp,
+      kVkUp,
     );
     liveRoomShortcutVolumeUpModifiers.value =
         LocalStorageService.instance.getValue(
@@ -685,11 +772,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutVolumeDown.value = _normalizeLiveRoomShortcut(
-      LocalStorageService.instance.getValue(
-        LocalStorageService.kLiveRoomShortcutVolumeDown,
-        LogicalKeyboardKey.arrowDown.keyId,
-      ),
+    liveRoomShortcutVolumeDown.value = _readLiveRoomShortcutVk(
+      LocalStorageService.kLiveRoomShortcutVolumeDown,
+      kVkDown,
     );
     liveRoomShortcutVolumeDownModifiers.value =
         LocalStorageService.instance.getValue(
@@ -697,11 +782,9 @@ class AppSettingsController extends GetxController {
       0,
     );
 
-    liveRoomShortcutBrightnessUp.value = _normalizeLiveRoomShortcut(
-      LocalStorageService.instance.getValue(
-        LocalStorageService.kLiveRoomShortcutBrightnessUp,
-        LogicalKeyboardKey.arrowUp.keyId,
-      ),
+    liveRoomShortcutBrightnessUp.value = _readLiveRoomShortcutVk(
+      LocalStorageService.kLiveRoomShortcutBrightnessUp,
+      kVkUp,
     );
     liveRoomShortcutBrightnessUpModifiers.value =
         LocalStorageService.instance.getValue(
@@ -709,11 +792,9 @@ class AppSettingsController extends GetxController {
       kModifierShift,
     );
 
-    liveRoomShortcutBrightnessDown.value = _normalizeLiveRoomShortcut(
-      LocalStorageService.instance.getValue(
-        LocalStorageService.kLiveRoomShortcutBrightnessDown,
-        LogicalKeyboardKey.arrowDown.keyId,
-      ),
+    liveRoomShortcutBrightnessDown.value = _readLiveRoomShortcutVk(
+      LocalStorageService.kLiveRoomShortcutBrightnessDown,
+      kVkDown,
     );
     liveRoomShortcutBrightnessDownModifiers.value =
         LocalStorageService.instance.getValue(
@@ -722,11 +803,20 @@ class AppSettingsController extends GetxController {
     );
   }
 
-  /// 校验快捷键值是否合法，不合法回退为关闭
-  int _normalizeLiveRoomShortcut(int value) {
-    return liveRoomShortcutOptions.containsKey(value)
-        ? value
-        : kShortcutDisabled;
+  /// 校验快捷键 VK 是否合法，不合法回退为关闭
+  int _normalizeLiveRoomShortcut(int vk) {
+    return isValidShortcutVk(vk) ? vk : kShortcutDisabled;
+  }
+
+  /// 兼容读取：旧版存储格式为 LogicalKeyboardKey.keyId（>0xFF 的大整数），
+  /// 其低 8 位即 Windows VK 码；新版直接存 VK 码。
+  int _readLiveRoomShortcutVk(String storageKey, int defaultValue) {
+    final stored =
+        LocalStorageService.instance.getValue(storageKey, defaultValue);
+    if (stored > 0xFF) {
+      return _normalizeLiveRoomShortcut(stored & 0xFF);
+    }
+    return _normalizeLiveRoomShortcut(stored);
   }
 
   /// 所有快捷键动作名称（用于冲突提示）

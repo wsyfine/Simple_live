@@ -14,13 +14,13 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
+import 'package:simple_live_app/app/desktop_shortcut_manager.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/app/utils/listen_fourth_button.dart';
 import 'package:simple_live_app/models/db/follow_user.dart';
 import 'package:simple_live_app/models/db/follow_user_tag.dart';
 import 'package:simple_live_app/models/db/history.dart';
-import 'package:simple_live_app/modules/live_room/live_room_controller.dart';
 import 'package:simple_live_app/modules/other/debug_log_page.dart';
 import 'package:simple_live_app/routes/app_pages.dart';
 import 'package:simple_live_app/routes/route_path.dart';
@@ -173,23 +173,8 @@ void initCoreLog() {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
-  /// 原生层快捷键通道（windows/runner/flutter_window.cpp）
-  static const MethodChannel _desktopShortcutChannel =
-      MethodChannel("simple_live/desktop_shortcuts");
-
-  static bool _desktopShortcutHandlerBound = false;
-
-  static bool? _desktopShortcutCaptureEnabled;
-
-  static bool get _isDesktopPlatform =>
-      Platform.isWindows || Platform.isMacOS || Platform.isLinux;
-
-  /// 当前焦点是否在可编辑文本（输入法组合输入状态）
-  static bool get _hasEditableTextFocus {
-    final focusContext = FocusManager.instance.primaryFocus?.context;
-    return focusContext != null &&
-        focusContext.findAncestorWidgetOfExactType<EditableText>() != null;
-  }
+  /// 全局 ESC 退出全屏监听焦点节点（static 固定复用，避免每次 build 重建抢焦点）
+  static final FocusNode _globalKeysFocusNode = FocusNode();
 
   /// 主题根据设置获取主题模式
   /// * 0: 跟随系统
@@ -211,14 +196,8 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 绑定原生快捷键通道（仅一次）
-    if (!_desktopShortcutHandlerBound) {
-      _desktopShortcutChannel.setMethodCallHandler(_handleDesktopShortcutMethod);
-      FocusManager.instance.addListener(_syncDesktopShortcutCaptureState);
-      _desktopShortcutHandlerBound = true;
-    }
-    // 桌面端初次同步快捷键捕获状态
-    unawaited(_syncDesktopShortcutCaptureState());
+    // 初始化桌面快捷键管理器（绑定原生通道与焦点监听，仅一次）
+    DesktopShortcutManager.instance.init();
 
     bool isDynamicColor = AppSettingsController.instance.isDynamic.value;
     Color styleColor = Color(AppSettingsController.instance.styleColor.value);
@@ -245,8 +224,8 @@ class MyApp extends StatelessWidget {
         initialRoute: RoutePath.kIndex,
         getPages: AppPages.routes,
         routingCallback: (_) {
-          // 路由变化时同步快捷键捕获状态（如离开直播间页面）
-          unawaited(_syncDesktopShortcutCaptureState());
+          // 路由变化时兜底同步快捷键捕获状态
+          DesktopShortcutManager.instance.onRouteChanged();
         },
         //国际化
         locale: const Locale("zh", "CN"),
@@ -312,7 +291,7 @@ class MyApp extends StatelessWidget {
                     ),
                   },
                   child: KeyboardListener(
-                    focusNode: FocusNode(),
+                    focusNode: MyApp._globalKeysFocusNode,
                     onKeyEvent: (KeyEvent event) async {
                       if (event is KeyDownEvent &&
                           event.logicalKey == LogicalKeyboardKey.escape) {
@@ -357,171 +336,5 @@ class MyApp extends StatelessWidget {
         ),
       );
     }));
-  }
-
-  /// 同步桌面快捷键捕获状态（通知原生层是否拦截按键）
-  /// 仅在直播间页面且焦点不在输入框时开启捕获
-  static Future<void> _syncDesktopShortcutCaptureState() async {
-    if (!_isDesktopPlatform) {
-      return;
-    }
-    final enabled = Get.isRegistered<LiveRoomController>() &&
-        !_hasEditableTextFocus;
-    if (_desktopShortcutCaptureEnabled == enabled) {
-      return;
-    }
-    _desktopShortcutCaptureEnabled = enabled;
-    try {
-      await _desktopShortcutChannel.invokeMethod(
-        "setShortcutCaptureEnabled",
-        {"enabled": enabled},
-      );
-    } catch (e) {
-      Log.d("桌面快捷键捕获状态同步失败: $e");
-    }
-  }
-
-  /// 原生通道回调（Windows 原生层在 WM_KEYDOWN 捕获物理键后转发）
-  static Future<dynamic> _handleDesktopShortcutMethod(MethodCall call) async {
-    if (call.method == "shortcutKeyDown") {
-      final args = call.arguments;
-      if (args is! Map) {
-        return null;
-      }
-      final key = args["key"]?.toString() ?? "";
-      final modifiers = (args["modifiers"] as int?) ?? 0;
-      final isRepeat = (args["isRepeat"] as bool?) ?? false;
-      if (key.isEmpty) {
-        return null;
-      }
-      await _handleDesktopShortcutByPhysicalKey(key, modifiers, isRepeat);
-      return null;
-    }
-    if (call.method == "shortcutCaptureStateRequested") {
-      await _syncDesktopShortcutCaptureState();
-      return null;
-    }
-    return null;
-  }
-
-  /// 根据物理键名匹配直播间快捷键并执行对应动作
-  static Future<void> _handleDesktopShortcutByPhysicalKey(
-      String physicalKeyName, int modifiers, bool isRepeat) async {
-    if (_hasEditableTextFocus) {
-      return;
-    }
-    if (!Get.isRegistered<LiveRoomController>()) {
-      return;
-    }
-    final controller = Get.find<LiveRoomController>();
-    final settings = AppSettingsController.instance;
-
-    // 物理键名 -> keyId
-    int? keyId;
-    switch (physicalKeyName) {
-      case "keyF":
-        keyId = LogicalKeyboardKey.keyF.keyId;
-        break;
-      case "keyD":
-        keyId = LogicalKeyboardKey.keyD.keyId;
-        break;
-      case "keyM":
-        keyId = LogicalKeyboardKey.keyM.keyId;
-        break;
-      case "keyR":
-        keyId = LogicalKeyboardKey.keyR.keyId;
-        break;
-      case "keyC":
-        keyId = LogicalKeyboardKey.keyC.keyId;
-        break;
-      case "keyQ":
-        keyId = LogicalKeyboardKey.keyQ.keyId;
-        break;
-      case "keyE":
-        keyId = LogicalKeyboardKey.keyE.keyId;
-        break;
-      case "keyT":
-        keyId = LogicalKeyboardKey.keyT.keyId;
-        break;
-      case "keyG":
-        keyId = LogicalKeyboardKey.keyG.keyId;
-        break;
-      case "keyB":
-        keyId = LogicalKeyboardKey.keyB.keyId;
-        break;
-      case "keyN":
-        keyId = LogicalKeyboardKey.keyN.keyId;
-        break;
-      case "arrowUp":
-        keyId = LogicalKeyboardKey.arrowUp.keyId;
-        break;
-      case "arrowDown":
-        keyId = LogicalKeyboardKey.arrowDown.keyId;
-        break;
-      default:
-        return;
-    }
-
-    bool matches(int shortcut, int shortcutModifiers) {
-      if (shortcut == AppSettingsController.kShortcutDisabled) {
-        return false;
-      }
-      return shortcut == keyId && shortcutModifiers == modifiers;
-    }
-
-    if (matches(settings.liveRoomShortcutFullScreen.value,
-        settings.liveRoomShortcutFullScreenModifiers.value)) {
-      if (isRepeat) return; // 切换类动作忽略长按重复
-      if (controller.fullScreenState.value) {
-        controller.exitFull();
-      } else {
-        controller.enterFullScreen();
-      }
-      return;
-    }
-    if (matches(settings.liveRoomShortcutDanmaku.value,
-        settings.liveRoomShortcutDanmakuModifiers.value)) {
-      if (isRepeat) return;
-      controller.showDanmakuState.value = !controller.showDanmakuState.value;
-      return;
-    }
-    if (matches(settings.liveRoomShortcutMute.value,
-        settings.liveRoomShortcutMuteModifiers.value)) {
-      if (isRepeat) return;
-      controller.toggleMute();
-      return;
-    }
-    if (matches(settings.liveRoomShortcutVolumeUp.value,
-        settings.liveRoomShortcutVolumeUpModifiers.value)) {
-      controller.adjustVolume(5);
-      return;
-    }
-    if (matches(settings.liveRoomShortcutVolumeDown.value,
-        settings.liveRoomShortcutVolumeDownModifiers.value)) {
-      controller.adjustVolume(-5);
-      return;
-    }
-    if (matches(settings.liveRoomShortcutRefresh.value,
-        settings.liveRoomShortcutRefreshModifiers.value)) {
-      if (isRepeat) return;
-      controller.refreshRoom();
-      return;
-    }
-    if (matches(settings.liveRoomShortcutToggleChat.value,
-        settings.liveRoomShortcutToggleChatModifiers.value)) {
-      if (isRepeat) return;
-      controller.toggleChatShowState();
-      return;
-    }
-    if (matches(settings.liveRoomShortcutBrightnessUp.value,
-        settings.liveRoomShortcutBrightnessUpModifiers.value)) {
-      controller.adjustBrightness(1);
-      return;
-    }
-    if (matches(settings.liveRoomShortcutBrightnessDown.value,
-        settings.liveRoomShortcutBrightnessDownModifiers.value)) {
-      controller.adjustBrightness(-1);
-      return;
-    }
   }
 }

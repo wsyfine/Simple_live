@@ -26,8 +26,29 @@ import 'package:simple_live_app/widgets/settings/settings_switch.dart';
 import 'package:simple_live_app/widgets/superchat_card.dart';
 import 'package:simple_live_core/simple_live_core.dart';
 
-class LiveRoomPage extends GetView<LiveRoomController> {
+class LiveRoomPage extends StatefulWidget {
   const LiveRoomPage({Key? key}) : super(key: key);
+
+  @override
+  State<LiveRoomPage> createState() => _LiveRoomPageState();
+}
+
+class _LiveRoomPageState extends State<LiveRoomPage> {
+  LiveRoomController get controller => Get.find<LiveRoomController>();
+
+  /// 桌面端快捷键兜底监听焦点节点（复用，避免每次 build 重建抢焦点）
+  final FocusNode _desktopKeysFocusNode = FocusNode();
+
+  @override
+  void initState() {
+    super.initState();
+  }
+
+  @override
+  void dispose() {
+    _desktopKeysFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -107,7 +128,7 @@ class LiveRoomPage extends GetView<LiveRoomController> {
       // 此处仅保留未被原生层捕获的按键：Enter 全屏、←/→ 切换直播间
       return KeyboardListener(
         autofocus: true,
-        focusNode: FocusNode(),
+        focusNode: _desktopKeysFocusNode,
         onKeyEvent: (KeyEvent event) {
           // 输入法组合输入中不响应快捷键（防止与中文输入法冲突）
           if (event is KeyDownEvent &&

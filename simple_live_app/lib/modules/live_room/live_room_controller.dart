@@ -12,6 +12,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/constant.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
+import 'package:simple_live_app/app/desktop_shortcut_manager.dart';
 import 'package:simple_live_app/app/event_bus.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/sites.dart';
@@ -118,6 +119,9 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     showDanmakuState.value = AppSettingsController.instance.danmuEnable.value;
     followed.value = DBService.instance.getFollowExist("${site.id}_$roomId");
     loadData();
+    // 进入直播间：开启桌面快捷键捕获（配置驱动分发）
+    DesktopShortcutManager.instance.onShortcutKey = dispatchDesktopShortcut;
+    DesktopShortcutManager.instance.enterLiveRoomScope();
 
     scrollController.addListener(scrollListener);
 
@@ -757,6 +761,103 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     chatShowState.value = !chatShowState.value;
   }
 
+  /// 桌面快捷键分发（由 DesktopShortcutManager 回调，配置驱动匹配任意键位）
+  void dispatchDesktopShortcut(
+      int keyCode, int scanCode, int modifiers, bool isRepeat) {
+    // 内置按键（不参与自定义配置）：Enter 全屏、←/→ 切换直播间、Esc 退出全屏
+    // 原生层在捕获开启时会消费全部按键，原 KeyboardListener 无法收到，故在此处理
+    if (keyCode == 0x1B) { // Esc
+      if (isRepeat) return;
+      if (fullScreenState.value) {
+        exitFull();
+      }
+      return;
+    }
+    if (keyCode == 0x0D) { // Enter
+      if (isRepeat) return;
+      if (fullScreenState.value) {
+        exitFull();
+      } else {
+        enterFullScreen();
+      }
+      return;
+    }
+    if (keyCode == 0x25) { // ←
+      if (isRepeat) return;
+      switchToPrevLive();
+      return;
+    }
+    if (keyCode == 0x27) { // →
+      if (isRepeat) return;
+      switchToNextLive();
+      return;
+    }
+
+    final settings = AppSettingsController.instance;
+
+    bool matches(int shortcutVk, int shortcutModifiers) {
+      if (shortcutVk == AppSettingsController.kShortcutDisabled) {
+        return false;
+      }
+      return shortcutVk == keyCode && shortcutModifiers == modifiers;
+    }
+
+    if (matches(settings.liveRoomShortcutFullScreen.value,
+        settings.liveRoomShortcutFullScreenModifiers.value)) {
+      if (isRepeat) return; // 切换类动作忽略长按重复
+      if (fullScreenState.value) {
+        exitFull();
+      } else {
+        enterFullScreen();
+      }
+      return;
+    }
+    if (matches(settings.liveRoomShortcutDanmaku.value,
+        settings.liveRoomShortcutDanmakuModifiers.value)) {
+      if (isRepeat) return;
+      showDanmakuState.value = !showDanmakuState.value;
+      return;
+    }
+    if (matches(settings.liveRoomShortcutMute.value,
+        settings.liveRoomShortcutMuteModifiers.value)) {
+      if (isRepeat) return;
+      toggleMute();
+      return;
+    }
+    if (matches(settings.liveRoomShortcutVolumeUp.value,
+        settings.liveRoomShortcutVolumeUpModifiers.value)) {
+      adjustVolume(5);
+      return;
+    }
+    if (matches(settings.liveRoomShortcutVolumeDown.value,
+        settings.liveRoomShortcutVolumeDownModifiers.value)) {
+      adjustVolume(-5);
+      return;
+    }
+    if (matches(settings.liveRoomShortcutRefresh.value,
+        settings.liveRoomShortcutRefreshModifiers.value)) {
+      if (isRepeat) return;
+      refreshRoom();
+      return;
+    }
+    if (matches(settings.liveRoomShortcutToggleChat.value,
+        settings.liveRoomShortcutToggleChatModifiers.value)) {
+      if (isRepeat) return;
+      toggleChatShowState();
+      return;
+    }
+    if (matches(settings.liveRoomShortcutBrightnessUp.value,
+        settings.liveRoomShortcutBrightnessUpModifiers.value)) {
+      adjustBrightness(1);
+      return;
+    }
+    if (matches(settings.liveRoomShortcutBrightnessDown.value,
+        settings.liveRoomShortcutBrightnessDownModifiers.value)) {
+      adjustBrightness(-1);
+      return;
+    }
+  }
+
   /// 切换到下一个关注的直播间（右方向键）
   void switchToNextLive() {
     _switchFollowLive(1);
@@ -1221,6 +1322,9 @@ ${error?.stackTrace}''');
 
   @override
   void onClose() {
+    // 离开直播间：关闭桌面快捷键捕获
+    DesktopShortcutManager.instance.onShortcutKey = null;
+    DesktopShortcutManager.instance.exitLiveRoomScope();
     WidgetsBinding.instance.removeObserver(this);
     scrollController.removeListener(scrollListener);
     autoExitTimer?.cancel();

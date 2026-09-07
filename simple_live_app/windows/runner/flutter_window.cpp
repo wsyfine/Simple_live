@@ -54,6 +54,22 @@ bool FlutterWindow::OnCreate() {
           result->Success();
           return;
         }
+        if (call.method_name() == "setShortcutRecordingEnabled") {
+          const auto* arguments =
+              std::get_if<flutter::EncodableMap>(call.arguments());
+          if (arguments) {
+            const auto enabled = arguments->find(
+                flutter::EncodableValue("enabled"));
+            if (enabled != arguments->end()) {
+              if (const auto* value =
+                      std::get_if<bool>(&enabled->second)) {
+                shortcut_recording_enabled_ = *value;
+              }
+            }
+          }
+          result->Success();
+          return;
+        }
         result->NotImplemented();
       });
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
@@ -115,98 +131,67 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
 }
 
 bool FlutterWindow::HandleShortcutKeyDown(WPARAM wparam, LPARAM lparam) {
-  const std::string key = ShortcutKeyForWindowsKey(wparam, lparam);
-  if (key.empty()) {
-    return false;
-  }
-  // bit30 表示按键长按重复消息，原样转发给 Dart 侧由动作类型决定是否忽略
-  const bool is_repeat = (lparam & (1 << 30)) != 0;
-  SendShortcutEvent(key, GetModifierState(), is_repeat);
-  return shortcut_capture_enabled_;
-}
-
-std::string FlutterWindow::ShortcutKeyForWindowsKey(WPARAM wparam,
-                                                     LPARAM lparam) {
+  const UINT vk = static_cast<UINT>(wparam);
   const UINT scan_code = (lparam >> 16) & 0xff;
-  switch (scan_code) {
-    case 0x21:
-      return "keyF";
-    case 0x20:
-      return "keyD";
-    case 0x32:
-      return "keyM";
-    case 0x13:
-      return "keyR";
-    case 0x2e:
-      return "keyC";
-    case 0x10:
-      return "keyQ";
-    case 0x12:
-      return "keyE";
-    case 0x14:
-      return "keyT";
-    case 0x22:
-      return "keyG";
-    case 0x30:
-      return "keyB";
-    case 0x31:
-      return "keyN";
-    case 0x48:
-      return "arrowUp";
-    case 0x50:
-      return "arrowDown";
-    default:
-      break;
+  const bool is_repeat = (lparam & (1 << 30)) != 0;
+
+  // 录制模式：将按键（含修饰键状态）发送给 Dart，供快捷键设置页录制绑定。
+  // 仅在非长按重复时响应，并在按下组合键的末键（非修饰键）时才上报，
+  // 这样 Ctrl+F 会由 F 键触达且 modifiers 已包含 Ctrl 状态。
+  if (shortcut_recording_enabled_ && !is_repeat) {
+    // 修饰键本身不作为录制最末键（按下组合键的末键时才上报，
+    // 这样 Ctrl+F 由 F 触达且 modifiers 已包含 Ctrl 状态）
+    switch (vk) {
+      case VK_SHIFT:
+      case VK_CONTROL:
+      case VK_MENU:
+      case VK_LWIN:
+      case VK_RWIN:
+      case VK_APPS:
+      case VK_LSHIFT:
+      case VK_RSHIFT:
+      case VK_LCONTROL:
+      case VK_RCONTROL:
+      case VK_LMENU:
+      case VK_RMENU:
+        return false;
+      default:
+        break;
+    }
+    SendKeyEvent("shortcutRecorded", vk, scan_code, GetModifierState(), false);
+    // 录制按键不消费事件，避免设置页 UI 失去按键输入
+    return false;
   }
 
-  switch (wparam) {
-    case 'F':
-      return "keyF";
-    case 'D':
-      return "keyD";
-    case 'M':
-      return "keyM";
-    case 'R':
-      return "keyR";
-    case 'C':
-      return "keyC";
-    case 'Q':
-      return "keyQ";
-    case 'E':
-      return "keyE";
-    case 'T':
-      return "keyT";
-    case 'G':
-      return "keyG";
-    case 'B':
-      return "keyB";
-    case 'N':
-      return "keyN";
-    case VK_UP:
-      return "arrowUp";
-    case VK_DOWN:
-      return "arrowDown";
-    default:
-      return "";
+  // 快捷键捕获模式：直播间页面且焦点不在输入框时开启。
+  // 开启后所有按键均转发给 Dart 侧由配置匹配，并消费事件防止 Flutter 层重复处理。
+  if (shortcut_capture_enabled_) {
+    SendKeyEvent("shortcutKeyDown", vk, scan_code, GetModifierState(),
+                 is_repeat);
+    return true;
   }
+
+  return false;
 }
 
-bool FlutterWindow::SendShortcutEvent(const std::string& key, int modifiers,
-                                      bool is_repeat) {
+void FlutterWindow::SendKeyEvent(const std::string& method, UINT vk,
+                                 UINT scan_code, int modifiers,
+                                 bool is_repeat) {
   if (!shortcut_channel_) {
-    return false;
+    return;
   }
   flutter::EncodableMap arguments = {
-      {flutter::EncodableValue("key"), flutter::EncodableValue(key)},
+      {flutter::EncodableValue("keyCode"),
+       flutter::EncodableValue(static_cast<int32_t>(vk))},
+      {flutter::EncodableValue("scanCode"),
+       flutter::EncodableValue(static_cast<int32_t>(scan_code))},
       {flutter::EncodableValue("modifiers"),
        flutter::EncodableValue(modifiers)},
       {flutter::EncodableValue("isRepeat"),
        flutter::EncodableValue(is_repeat)},
   };
   shortcut_channel_->InvokeMethod(
-      "shortcutKeyDown",
-      std::make_unique<flutter::EncodableValue>(arguments));
-  return false;
+      method, std::make_unique<flutter::EncodableValue>(arguments));
 }
 
 int FlutterWindow::GetModifierState() {
