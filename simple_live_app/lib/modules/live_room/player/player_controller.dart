@@ -40,6 +40,17 @@ mixin PlayerMixin {
   /// 初始化播放器并设置 ao 参数
   Future<void> initializePlayer() async {
     var pp = player.platform as NativePlayer;
+    // 设置浏览器 UA：libmpv 默认 UA（libmpv/xxx）会被部分 CDN 以 403 拒绝，
+    // 通过 MPV 的 user-agent 属性（而非 http-header-fields）覆盖默认 UA 才能生效
+    try {
+      await pp.setProperty(
+        'user-agent',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      );
+    } catch (e) {
+      Log.logPrint(e);
+    }
     // 设置音频输出驱动
     if (AppSettingsController.instance.customPlayerOutput.value) {
       if (player.platform is NativePlayer) {
@@ -581,7 +592,7 @@ mixin PlayerGestureControlMixin
     throttle = DelayedThrottle(200);
 
     verticalDragging = true;
-    // 所有平台都显示调节数值浮层（含Windows/Linux桌面端）
+    // 所有平台都显示调节数值浮层（含Windows/macOS桌面端）
     showGestureTip.value = true;
     // 重置跨手势去重状态，避免新手势首次拖动被旧值跳过
     lastVolume = -1;

@@ -103,7 +103,7 @@ Future migrateData() async {
 }
 
 Future initWindow() async {
-  if (!(Platform.isMacOS || Platform.isWindows || Platform.isLinux)) {
+  if (!(Platform.isMacOS || Platform.isWindows)) {
     return;
   }
   await windowManager.ensureInitialized();

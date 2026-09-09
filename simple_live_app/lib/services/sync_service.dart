@@ -138,9 +138,6 @@ class SyncService extends GetxService {
     } else if (Platform.isMacOS) {
       var info = await deviceInfo.macOsInfo;
       name = info.computerName;
-    } else if (Platform.isLinux) {
-      var info = await deviceInfo.linuxInfo;
-      name = info.name;
     } else if (Platform.isWindows) {
       var info = await deviceInfo.windowsInfo;
       name = info.userName;

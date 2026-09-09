@@ -182,12 +182,12 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   }
   // 弹窗逻辑
 
-  /// 退出应用：Windows/Linux/macOS 桌面端优先优雅关闭窗口，
+  /// 退出应用：Windows/macOS 桌面端优先优雅关闭窗口，
   /// 让 Flutter 引擎与媒体库走正常生命周期完成资源清理，避免直接
   /// exit(0) 进程级终止触发 Windows hard error；
   /// 其他平台保持原有行为。
   Future<void> exitApp() async {
-    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+    if (Platform.isWindows || Platform.isMacOS) {
       try {
         // 注意：不要在 destroy 前手动 player.dispose()——
         // media_kit 的 dispose 非幂等，窗口销毁走 Get 生命周期
@@ -1143,7 +1143,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
                 },
               ),
             ),
-            if (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+            if (Platform.isWindows || Platform.isMacOS)
               Positioned(
                 right: 12,
                 bottom: 12,

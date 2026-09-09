@@ -342,7 +342,7 @@ class Utils {
     );
     if (!result) {
       // 桌面端优雅关闭窗口，避免直接 exit(0) 触发 Windows hard error
-      if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
+      if (Platform.isWindows || Platform.isMacOS) {
         try {
           await windowManager.destroy();
           return;

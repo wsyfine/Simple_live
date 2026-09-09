@@ -894,7 +894,7 @@ void showFollowUser(LiveRoomController controller) {
               },
             ),
           ),
-          if (Platform.isLinux || Platform.isWindows || Platform.isMacOS)
+          if (Platform.isWindows || Platform.isMacOS)
             Positioned(
               right: 12,
               bottom: 12,

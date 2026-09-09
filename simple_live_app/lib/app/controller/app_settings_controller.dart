@@ -273,9 +273,7 @@ class AppSettingsController extends GetxController {
       LocalStorageService.kAudioOutputDriver,
       Platform.isAndroid
           ? "audiotrack"
-          : Platform.isLinux
-              ? "pulse"
-              : Platform.isWindows
+          : Platform.isWindows
                   ? "wasapi"
                   : Platform.isIOS
                       ? "audiounit"
