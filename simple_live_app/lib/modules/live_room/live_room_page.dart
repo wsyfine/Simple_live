@@ -851,13 +851,21 @@ class _LiveRoomPageState extends State<LiveRoomPage> {
                 controller.showPlayerSettingsSheet();
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.camera_alt_outlined),
-              title: const Text("截图"),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                controller.saveScreenshot();
-              },
+            Obx(
+              () => ListTile(
+                leading: Icon(
+                  controller.isRecording.value
+                      ? Icons.stop_circle_outlined
+                      : Icons.fiber_manual_record_outlined,
+                  color: controller.isRecording.value ? Colors.red : null,
+                ),
+                title: Text(controller.isRecording.value ? "停止录屏" : "录屏"),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  Get.back();
+                  controller.toggleScreenRecord();
+                },
+              ),
             ),
             Visibility(
               visible: Platform.isAndroid,

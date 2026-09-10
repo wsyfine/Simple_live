@@ -35,6 +35,9 @@ class AppSettingsController extends GetxController {
   static int get kPhysicalKeyEscape => PhysicalKeyboardKey.escape.usbHidUsage;
   static int get kPhysicalKeyLeft => PhysicalKeyboardKey.arrowLeft.usbHidUsage;
   static int get kPhysicalKeyRight => PhysicalKeyboardKey.arrowRight.usbHidUsage;
+  static int get kPhysicalKeyBackspace =>
+      PhysicalKeyboardKey.backspace.usbHidUsage;
+  static int get kPhysicalKeyS => PhysicalKeyboardKey.keyS.usbHidUsage;
 
   /// 物理键 usage 显示名（USB HID usage，与大小写/布局/输入法无关，release 下
   /// Flutter 的 debugName 为空，故自定义映射表）
@@ -300,7 +303,20 @@ class AppSettingsController extends GetxController {
     initHomeSort();
     initLiveRoomShortcutSettings();
 
+    screenRecordDir.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kScreenRecordDir, "");
+
     super.onInit();
+  }
+
+  /// 录屏保存地址（空=使用默认目录）
+  var screenRecordDir = "".obs;
+  void setScreenRecordDir(String e) {
+    screenRecordDir.value = e;
+    LocalStorageService.instance.setValue(
+      LocalStorageService.kScreenRecordDir,
+      e,
+    );
   }
 
   void initSiteSort() {
@@ -710,6 +726,14 @@ class AppSettingsController extends GetxController {
   var liveRoomShortcutBrightnessDown = kPhysicalKeyDown.obs;
   var liveRoomShortcutBrightnessDownModifiers = kModifierShift.obs;
 
+  /// 关闭直播间返回主页，默认 Backspace
+  var liveRoomShortcutCloseRoom = kPhysicalKeyBackspace.obs;
+  var liveRoomShortcutCloseRoomModifiers = 0.obs;
+
+  /// 录屏/停止录屏，默认 S
+  var liveRoomShortcutRecord = kPhysicalKeyS.obs;
+  var liveRoomShortcutRecordModifiers = 0.obs;
+
   /// 初始化直播间快捷键设置
   void initLiveRoomShortcutSettings() {
     liveRoomShortcutFullScreen.value = _readLiveRoomShortcutPhysical(
@@ -801,6 +825,20 @@ class AppSettingsController extends GetxController {
       LocalStorageService.kLiveRoomShortcutBrightnessDownModifiers,
       kModifierShift,
     );
+
+    liveRoomShortcutCloseRoom.value = _readLiveRoomShortcutPhysical(
+      LocalStorageService.kLiveRoomShortcutCloseRoom,
+      kPhysicalKeyBackspace,
+    );
+    liveRoomShortcutCloseRoomModifiers.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kLiveRoomShortcutCloseRoomModifiers, 0);
+
+    liveRoomShortcutRecord.value = _readLiveRoomShortcutPhysical(
+      LocalStorageService.kLiveRoomShortcutRecord,
+      kPhysicalKeyS,
+    );
+    liveRoomShortcutRecordModifiers.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kLiveRoomShortcutRecordModifiers, 0);
   }
 
   /// 校验快捷键 physical usage 是否合法，不合法回退为关闭
@@ -927,6 +965,8 @@ class AppSettingsController extends GetxController {
         "调低音量": liveRoomShortcutVolumeDown.value,
         "调高亮度": liveRoomShortcutBrightnessUp.value,
         "调低亮度": liveRoomShortcutBrightnessDown.value,
+        "关闭直播间": liveRoomShortcutCloseRoom.value,
+        "录屏/停止录屏": liveRoomShortcutRecord.value,
       };
 
   Map<String, int> get _liveRoomShortcutModifierLabels => {
@@ -939,6 +979,8 @@ class AppSettingsController extends GetxController {
         "调低音量": liveRoomShortcutVolumeDownModifiers.value,
         "调高亮度": liveRoomShortcutBrightnessUpModifiers.value,
         "调低亮度": liveRoomShortcutBrightnessDownModifiers.value,
+        "关闭直播间": liveRoomShortcutCloseRoomModifiers.value,
+        "录屏/停止录屏": liveRoomShortcutRecordModifiers.value,
       };
 
   /// 设置快捷键（含冲突检测）
@@ -1085,6 +1127,32 @@ class AppSettingsController extends GetxController {
       storageKey: LocalStorageService.kLiveRoomShortcutBrightnessDown,
       modifiersStorageKey:
           LocalStorageService.kLiveRoomShortcutBrightnessDownModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutCloseRoom(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutCloseRoom,
+      modifierTarget: liveRoomShortcutCloseRoomModifiers,
+      actionName: "关闭直播间",
+      storageKey: LocalStorageService.kLiveRoomShortcutCloseRoom,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutCloseRoomModifiers,
+    );
+  }
+
+  void setLiveRoomShortcutRecord(int keyId, int modifiers) {
+    _setLiveRoomShortcut(
+      keyId: keyId,
+      modifiers: modifiers,
+      keyTarget: liveRoomShortcutRecord,
+      modifierTarget: liveRoomShortcutRecordModifiers,
+      actionName: "录屏/停止录屏",
+      storageKey: LocalStorageService.kLiveRoomShortcutRecord,
+      modifiersStorageKey:
+          LocalStorageService.kLiveRoomShortcutRecordModifiers,
     );
   }
 }

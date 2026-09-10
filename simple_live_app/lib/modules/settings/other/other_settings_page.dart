@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:remixicon/remixicon.dart';
@@ -134,6 +135,45 @@ class OtherSettingsPage extends GetView<OtherSettingsController> {
                     valueMap: controller.hardwareDecoder,
                     onChanged: (e) {
                       AppSettingsController.instance.setVideoHardwareDecoder(e);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
+            child: Text(
+              "录屏设置",
+              style: Get.textTheme.titleSmall,
+            ),
+          ),
+          SettingsCard(
+            child: Column(
+              children: [
+                Obx(
+                  () => ListTile(
+                    contentPadding: AppStyle.edgeInsetsL12.copyWith(right: 8),
+                    visualDensity: VisualDensity.compact,
+                    leading: const Icon(Icons.video_call_outlined),
+                    title: const Text("录屏保存地址"),
+                    subtitle: Text(
+                      AppSettingsController.instance.screenRecordDir.value.isEmpty
+                          ? "默认目录（未设置）"
+                          : AppSettingsController
+                              .instance.screenRecordDir.value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    trailing:
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                    onTap: () async {
+                      final path =
+                          await FilePicker.platform.getDirectoryPath();
+                      if (path != null && path.isNotEmpty) {
+                        AppSettingsController.instance
+                            .setScreenRecordDir(path);
+                      }
                     },
                   ),
                 ),

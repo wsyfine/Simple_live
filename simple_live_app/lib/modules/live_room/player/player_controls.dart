@@ -8,6 +8,7 @@ import 'package:remixicon/remixicon.dart';
 import 'package:simple_live_app/app/app_style.dart';
 import 'package:simple_live_app/app/controller/app_settings_controller.dart';
 import 'package:simple_live_app/app/sites.dart';
+import 'package:simple_live_app/app/storage_paths.dart';
 import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/modules/live_room/live_room_controller.dart';
 import 'package:simple_live_app/modules/settings/danmu_settings_page.dart';
@@ -18,6 +19,13 @@ import 'package:window_manager/window_manager.dart';
 import 'package:simple_live_app/widgets/superchat_card.dart';
 import 'dart:async';
 import 'package:simple_live_core/simple_live_core.dart';
+
+String _fmtRecordDuration(Duration d) {
+  final h = d.inHours;
+  final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+  return h > 0 ? "$h:$m:$s" : "$m:$s";
+}
 
 Widget playerControls(
   VideoState videoState,
@@ -166,14 +174,33 @@ Widget buildFullControls(
                     ),
                   ),
                   AppStyle.hGap12,
-                  IconButton(
-                    onPressed: () {
-                      controller.saveScreenshot();
-                    },
-                    icon: const Icon(
-                      Icons.camera_alt_outlined,
-                      color: Colors.white,
-                      size: 24,
+                  Obx(
+                    () => controller.isRecording.value
+                        ? Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Text(
+                              "● ${_fmtRecordDuration(controller.recordDuration.value)} "
+                              "${StoragePaths.formatBytes(controller.recordBytes.value)}",
+                              style: const TextStyle(
+                                  color: Colors.red, fontSize: 13),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+                  Obx(
+                    () => IconButton(
+                      onPressed: () {
+                        controller.toggleScreenRecord();
+                      },
+                      icon: Icon(
+                        controller.isRecording.value
+                            ? Icons.stop_circle_outlined
+                            : Icons.fiber_manual_record_outlined,
+                        color: controller.isRecording.value
+                            ? Colors.red
+                            : Colors.white,
+                        size: 24,
+                      ),
                     ),
                   ),
                   IconButton(

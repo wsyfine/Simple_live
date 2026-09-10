@@ -92,6 +92,12 @@ class _ShortcutSettingsPageState extends State<ShortcutSettingsPage> {
       case "调低亮度":
         controller.setLiveRoomShortcutBrightnessDown(keyId, modifiers);
         break;
+      case "关闭直播间":
+        controller.setLiveRoomShortcutCloseRoom(keyId, modifiers);
+        break;
+      case "录屏/停止录屏":
+        controller.setLiveRoomShortcutRecord(keyId, modifiers);
+        break;
     }
   }
 
@@ -110,6 +116,9 @@ class _ShortcutSettingsPageState extends State<ShortcutSettingsPage> {
         AppSettingsController.kPhysicalKeyUp, AppSettingsController.kModifierShift);
     c.setLiveRoomShortcutBrightnessDown(
         AppSettingsController.kPhysicalKeyDown, AppSettingsController.kModifierShift);
+    c.setLiveRoomShortcutCloseRoom(
+        AppSettingsController.kPhysicalKeyBackspace, 0);
+    c.setLiveRoomShortcutRecord(AppSettingsController.kPhysicalKeyS, 0);
   }
 
   @override
@@ -238,6 +247,30 @@ class _ShortcutSettingsPageState extends State<ShortcutSettingsPage> {
                     recording: _recordingAction == "调低亮度",
                     onTap: () => _startRecording("调低亮度"),
                     onClear: () => _applyKey("调低亮度", 0, 0),
+                  ),
+                ),
+                AppStyle.divider,
+                Obx(
+                  () => _ShortcutTile(
+                    title: "关闭直播间",
+                    keyId: controller.liveRoomShortcutCloseRoom.value,
+                    modifiers:
+                        controller.liveRoomShortcutCloseRoomModifiers.value,
+                    recording: _recordingAction == "关闭直播间",
+                    onTap: () => _startRecording("关闭直播间"),
+                    onClear: () => _applyKey("关闭直播间", 0, 0),
+                  ),
+                ),
+                AppStyle.divider,
+                Obx(
+                  () => _ShortcutTile(
+                    title: "录屏/停止录屏",
+                    keyId: controller.liveRoomShortcutRecord.value,
+                    modifiers:
+                        controller.liveRoomShortcutRecordModifiers.value,
+                    recording: _recordingAction == "录屏/停止录屏",
+                    onTap: () => _startRecording("录屏/停止录屏"),
+                    onClear: () => _applyKey("录屏/停止录屏", 0, 0),
                   ),
                 ),
               ],

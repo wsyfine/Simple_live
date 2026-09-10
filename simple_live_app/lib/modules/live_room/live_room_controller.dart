@@ -17,7 +17,9 @@ import 'package:simple_live_app/app/desktop_shortcut_manager.dart';
 import 'package:simple_live_app/app/event_bus.dart';
 import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/sites.dart';
+import 'package:simple_live_app/app/storage_paths.dart';
 import 'package:simple_live_app/app/utils.dart';
+import 'package:simple_live_app/services/screen_recorder.dart';
 import 'package:simple_live_app/models/db/follow_user.dart';
 import 'package:simple_live_app/models/db/history.dart';
 import 'package:simple_live_app/modules/live_room/player/player_controller.dart';
@@ -895,7 +897,175 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
       adjustBrightness(-1);
       return true;
     }
+    if (matches(settings.liveRoomShortcutCloseRoom.value,
+        settings.liveRoomShortcutCloseRoomModifiers.value)) {
+      if (isRepeat) return true;
+      closeLiveRoom();
+      return true;
+    }
+    if (matches(settings.liveRoomShortcutRecord.value,
+        settings.liveRoomShortcutRecordModifiers.value)) {
+      if (isRepeat) return true;
+      toggleScreenRecord();
+      return true;
+    }
     return false;
+  }
+
+  /// 关闭直播间返回主页
+  void closeLiveRoom() {
+    if (smallWindowState.value) {
+      exitSmallWindow();
+    } else if (fullScreenState.value) {
+      exitFull();
+    }
+    Get.back();
+  }
+
+  /// 当前录屏文件路径
+  String? _recordPath;
+
+  /// 录屏引擎（拉流写文件，不依赖播放器 muxer）
+  final ScreenRecorder _recorder = ScreenRecorder();
+
+  /// 已录字节数 / 录制时长（UI 实时展示）
+  var recordBytes = 0.obs;
+  var recordDuration = Duration.zero.obs;
+  Timer? _recordTimer;
+
+  /// 启动/停止录屏（点击切换）
+  Future<void> toggleScreenRecord() async {
+    if (isRecording.value) {
+      await stopScreenRecord();
+    } else {
+      await startScreenRecord();
+    }
+  }
+
+  /// 启动录屏
+  Future<void> startScreenRecord() async {
+    try {
+      final dir = await _resolveRecordDir();
+      // 磁盘空间检查（低于 200MB 拒绝启动）
+      final free = StoragePaths.freeSpaceBytes(dir.path);
+      if (free >= 0 && free < 200 * 1024 * 1024) {
+        SmartDialog.showToast("磁盘可用空间不足，请清理后重试");
+        return;
+      }
+      final isFlv = _currentStreamIsFlv();
+      final ext = isFlv ? "flv" : "ts";
+      final name = StoragePaths.buildFileName(
+        siteId: site.id,
+        roomId: roomId,
+        title: detail.value?.title ?? roomId,
+        ext: ext,
+      );
+      final path = "${dir.path}${Platform.pathSeparator}$name";
+      _recorder.start(
+        url: _currentStreamUrl(),
+        headers: playHeaders,
+        destPath: path,
+        isHls: !isFlv,
+      );
+      _recordPath = path;
+      recordBytes.value = 0;
+      recordDuration.value = Duration.zero;
+      _recorder.onProgress = (bytes, duration) {
+        recordBytes.value = bytes;
+        recordDuration.value = duration;
+      };
+      _recorder.onInterrupted = _reconnectStream;
+      _recordTimer?.cancel();
+      _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        recordDuration.value = _recorder.recordedDuration;
+      });
+      isRecording.value = true;
+      SmartDialog.showToast("已开始录屏，再次点击停止");
+    } catch (e) {
+      Log.logPrint(e);
+      SmartDialog.showToast("启动录屏失败: $e");
+    }
+  }
+
+  /// 停止录屏并保存
+  Future<void> stopScreenRecord({bool showTip = true}) async {
+    if (!isRecording.value) {
+      return;
+    }
+    isRecording.value = false;
+    _recordTimer?.cancel();
+    _recorder.onProgress = null;
+    _recorder.onInterrupted = null;
+    recordBytes.value = 0;
+    recordDuration.value = Duration.zero;
+    final saved = await _recorder.stop();
+    final p = _recordPath;
+    _recordPath = null;
+    if (showTip) {
+      SmartDialog.showToast(
+        saved != null && p != null ? "录屏已停止并保存至:\n$p" : "录屏已停止",
+      );
+    }
+  }
+
+  /// 解析录屏保存目录：优先自定义，失效回退默认目录
+  Future<Directory> _resolveRecordDir() async {
+    final custom = AppSettingsController.instance.screenRecordDir.value;
+    if (custom.isNotEmpty) {
+      final dir = Directory(custom);
+      if (await dir.exists()) {
+        return dir;
+      }
+    }
+    return StoragePaths.screenRecordDir();
+  }
+
+  /// 当前线路是否为 FLV 流（决定录制文件扩展名）
+  bool _currentStreamIsFlv() {
+    if (playUrls.isEmpty) {
+      return false;
+    }
+    var index = currentLineIndex;
+    if (index < 0 || index >= playUrls.length) {
+      index = 0;
+    }
+    return playUrls[index].toLowerCase().contains(".flv");
+  }
+
+  /// 当前线路的流地址
+  String _currentStreamUrl() {
+    if (playUrls.isEmpty) {
+      throw StateError("无播放地址");
+    }
+    var index = currentLineIndex;
+    if (index < 0 || index >= playUrls.length) {
+      index = 0;
+    }
+    return playUrls[index];
+  }
+
+  /// 录屏断流续接：重新获取当前线路的最新流地址
+  Future<RecordNext?> _reconnectStream() async {
+    try {
+      if (detail.value == null || qualites.isEmpty) {
+        return null;
+      }
+      final playUrl = await site.liveSite.getPlayUrls(
+        detail: detail.value!,
+        quality: qualites[currentQuality],
+      );
+      if (playUrl.urls.isEmpty) {
+        return null;
+      }
+      var index = currentLineIndex;
+      if (index < 0 || index >= playUrl.urls.length) {
+        index = 0;
+      }
+      return (url: playUrl.urls[index], headers: playUrl.headers ?? {});
+    } catch (e) {
+      Log.w("录屏续接拉流失败: $e");
+      return null;
+    }
   }
 
   /// 切换到下一个关注的直播间（右方向键）
@@ -1370,6 +1540,13 @@ $stackTrace''');
     WidgetsBinding.instance.removeObserver(this);
     scrollController.removeListener(scrollListener);
     autoExitTimer?.cancel();
+
+    // 离开直播间：自动停止录屏并释放资源
+    _recordTimer?.cancel();
+    if (isRecording.value) {
+      isRecording.value = false;
+      _recorder.stop().then((_) {});
+    }
 
     liveDanmaku.stop();
     danmakuController = null;

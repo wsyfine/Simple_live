@@ -243,6 +243,23 @@ class LocalStorageService extends GetxService {
   static const String kLiveRoomShortcutBrightnessDownModifiers =
       "LiveRoomShortcutBrightnessDownModifiers";
 
+  /// 直播间快捷键-关闭直播间返回主页
+  static const String kLiveRoomShortcutCloseRoom = "LiveRoomShortcutCloseRoom";
+
+  /// 直播间快捷键-关闭直播间返回主页（修饰键掩码）
+  static const String kLiveRoomShortcutCloseRoomModifiers =
+      "LiveRoomShortcutCloseRoomModifiers";
+
+  /// 直播间快捷键-录屏/停止录屏
+  static const String kLiveRoomShortcutRecord = "LiveRoomShortcutRecord";
+
+  /// 直播间快捷键-录屏/停止录屏（修饰键掩码）
+  static const String kLiveRoomShortcutRecordModifiers =
+      "LiveRoomShortcutRecordModifiers";
+
+  /// 录屏保存地址（自定义目录，空=使用默认目录）
+  static const String kScreenRecordDir = "ScreenRecordDir";
+
   late Box settingsBox;
   late Box<String> shieldBox;
 
