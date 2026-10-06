@@ -260,6 +260,12 @@ class LocalStorageService extends GetxService {
   /// 录屏保存地址（自定义目录，空=使用默认目录）
   static const String kScreenRecordDir = "ScreenRecordDir";
 
+  /// 关闭窗口时最小化到系统托盘（仅 Windows）
+  static const String kMinimizeToTrayEnable = "MinimizeToTrayEnable";
+
+  /// 是否已经提示过「最小化到托盘」（只提示一次）
+  static const String kTrayTipShown = "TrayTipShown";
+
   late Box settingsBox;
   late Box<String> shieldBox;
 

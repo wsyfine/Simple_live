@@ -306,6 +306,9 @@ class AppSettingsController extends GetxController {
     screenRecordDir.value = LocalStorageService.instance
         .getValue(LocalStorageService.kScreenRecordDir, "");
 
+    minimizeToTrayEnable.value = LocalStorageService.instance
+        .getValue(LocalStorageService.kMinimizeToTrayEnable, true);
+
     super.onInit();
   }
 
@@ -315,6 +318,16 @@ class AppSettingsController extends GetxController {
     screenRecordDir.value = e;
     LocalStorageService.instance.setValue(
       LocalStorageService.kScreenRecordDir,
+      e,
+    );
+  }
+
+  /// 关闭窗口时最小化到系统托盘（仅 Windows 生效）
+  var minimizeToTrayEnable = true.obs;
+  void setMinimizeToTrayEnable(bool e) {
+    minimizeToTrayEnable.value = e;
+    LocalStorageService.instance.setValue(
+      LocalStorageService.kMinimizeToTrayEnable,
       e,
     );
   }

@@ -31,6 +31,7 @@ import 'package:simple_live_app/services/db_service.dart';
 import 'package:simple_live_app/services/follow_service.dart';
 import 'package:simple_live_app/services/local_storage_service.dart';
 import 'package:simple_live_app/services/sync_service.dart';
+import 'package:simple_live_app/services/tray_service.dart';
 import 'package:simple_live_app/widgets/status/app_loadding_widget.dart';
 import 'package:simple_live_core/simple_live_core.dart';
 import 'package:window_manager/window_manager.dart';
@@ -50,6 +51,8 @@ void main() async {
   );
   //初始化服务
   await initServices();
+  //初始化系统托盘
+  await initTray();
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   //设置状态栏为透明
   SystemUiOverlayStyle systemUiOverlayStyle = const SystemUiOverlayStyle(
@@ -143,6 +146,19 @@ Future initServices() async {
   Get.put(FollowService());
 
   initCoreLog();
+}
+
+/// 初始化系统托盘（仅 Windows）
+Future initTray() async {
+  if (!Platform.isWindows) {
+    return;
+  }
+  try {
+    Get.put(TrayService());
+    await TrayService.instance.init();
+  } catch (e) {
+    Log.logPrint(e);
+  }
 }
 
 void initCoreLog() {

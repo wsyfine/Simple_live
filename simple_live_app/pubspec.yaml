@@ -81,6 +81,7 @@ dependencies:
     sdk: flutter
   flutter_localizations:
     sdk: flutter
+  tray_manager: 0.5.3
 
 
 dev_dependencies:

@@ -180,6 +180,32 @@ class OtherSettingsPage extends GetView<OtherSettingsController> {
               ],
             ),
           ),
+          if (Platform.isWindows)
+            Padding(
+              padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
+              child: Text(
+                "窗口与托盘",
+                style: Get.textTheme.titleSmall,
+              ),
+            ),
+          if (Platform.isWindows)
+            SettingsCard(
+              child: Column(
+                children: [
+                  Obx(
+                    () => SettingsSwitch(
+                      value: AppSettingsController
+                          .instance.minimizeToTrayEnable.value,
+                      title: "关闭窗口时最小化到托盘",
+                      subtitle: "开启后点击窗口关闭按钮将隐藏到系统托盘，"
+                          "可通过托盘图标恢复窗口或退出应用",
+                      onChanged: AppSettingsController.instance
+                          .setMinimizeToTrayEnable,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: AppStyle.edgeInsetsA12.copyWith(top: 24),
             child: Text(
