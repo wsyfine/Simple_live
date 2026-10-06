@@ -191,6 +191,14 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   Future<void> exitApp() async {
     if (Platform.isWindows || Platform.isMacOS) {
       try {
+        // 先隐藏窗口再销毁。destroy 只是投递退出消息，窗口要等引擎与
+        // libmpv 析构完成后才真正消失；播放中这段析构要一两秒，窗口留
+        // 在屏幕上会被 Windows 判定为无响应并叠加等待光标。
+        await windowManager.hide();
+      } catch (e) {
+        Log.logPrint(e);
+      }
+      try {
         // 注意：不要在 destroy 前手动 player.dispose()——
         // media_kit 的 dispose 非幂等，窗口销毁走 Get 生命周期
         // onClose 时会再次释放，重复调用会抛 AssertionError

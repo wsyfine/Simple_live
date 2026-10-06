@@ -211,7 +211,11 @@ class TrayService extends GetxService with TrayListener, WindowListener {
     }
   }
 
-  /// 真正退出应用
+  /// 真正退出应用。
+  ///
+  /// 顺序很重要：先移除托盘图标、再隐藏窗口，最后才销毁窗口。
+  /// 销毁窗口只是投递一条退出消息，真正耗时的是此后的引擎与播放器
+  /// 析构；把窗口提前隐藏，这段耗时就发生在用户看不到的地方。
   Future<void> quitApp() async {
     if (_quitting) {
       return;
@@ -220,6 +224,16 @@ class TrayService extends GetxService with TrayListener, WindowListener {
     try {
       // 先移除托盘图标，避免退出后在托盘留下幽灵图标
       await trayManager.destroy();
+    } catch (e) {
+      Log.logPrint(e);
+    }
+    try {
+      // 先把窗口藏起来再销毁。
+      // windowManager.destroy() 只投递 WM_QUIT，窗口要等消息循环退出、
+      // FlutterViewController 析构完成后才被真正销毁；播放直播时
+      // libmpv 的析构要一两秒，窗口若留在屏幕上，Windows 会把它判定为
+      // 无响应并叠加等待光标（转圈）。先隐藏，用户看到的就是"点了就关"。
+      await windowManager.hide();
     } catch (e) {
       Log.logPrint(e);
     }
