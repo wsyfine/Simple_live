@@ -251,23 +251,26 @@ Widget buildFullControls(
                 ? 0
                 : -(80 + padding.bottom),
             duration: const Duration(milliseconds: 200),
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.transparent,
-                    Colors.black87,
-                  ],
+            child: MouseRegion(
+              // 鼠标停留在控制条上时保持显示，不自动隐藏
+              onHover: (_) => controller.resetHideControlsTimer(),
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.transparent,
+                      Colors.black87,
+                    ],
+                  ),
                 ),
-              ),
-              padding: EdgeInsets.only(
-                left: padding.left + 12,
-                right: padding.right + 12,
-                bottom: padding.bottom,
-              ),
-              child: Row(
+                padding: EdgeInsets.only(
+                  left: padding.left + 12,
+                  right: padding.right + 12,
+                  bottom: padding.bottom,
+                ),
+                child: Row(
                 children: [
                   IconButton(
                     onPressed: () {
@@ -377,6 +380,7 @@ Widget buildFullControls(
             ),
           ),
         ),
+      ),
 
         // 右侧锁定
         Obx(
@@ -500,6 +504,9 @@ Widget buildControls(
           //onLongPress: controller.showDebugInfo,
           child: MouseRegion(
             onEnter: controller.onEnter,
+            onHover: (PointerHoverEvent event) {
+              controller.onHover(event, videoState.context);
+            },
             child: Container(
               width: double.infinity,
               height: double.infinity,
@@ -514,18 +521,21 @@ Widget buildControls(
           right: 0,
           bottom: controller.showControlsState.value ? 0 : -48,
           duration: const Duration(milliseconds: 200),
-          child: Container(
-            decoration: const BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  Colors.transparent,
-                  Colors.black87,
-                ],
+          child: MouseRegion(
+            // 鼠标停留在控制条上时保持显示，不自动隐藏
+            onHover: (_) => controller.resetHideControlsTimer(),
+            child: Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    Colors.transparent,
+                    Colors.black87,
+                  ],
+                ),
               ),
-            ),
-            child: Row(
+              child: Row(
               children: [
                 IconButton(
                   onPressed: () {
@@ -649,6 +659,7 @@ Widget buildControls(
             ),
           ),
         ),
+      ),
       ),
       Obx(
         () => Offstage(

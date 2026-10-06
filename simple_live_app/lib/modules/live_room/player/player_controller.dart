@@ -497,15 +497,10 @@ mixin PlayerGestureControlMixin
     }
   }
 
+  /// 桌面端鼠标在播放区内移动时显示控制器并重新计时
+  /// - 控制器已显示时仅重新计时，移动到控制条以外的区域也能保持常亮
   void onHover(PointerHoverEvent event, BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final targetPosition = screenHeight * 0.25; // 计算屏幕顶部25%的位置
-    if (event.position.dy <= targetPosition ||
-        event.position.dy >= targetPosition * 3) {
-      if (!showControlsState.value) {
-        showControls();
-      }
-    }
+    showControls();
   }
 
   /// 双击全屏/退出全屏

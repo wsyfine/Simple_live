@@ -129,6 +129,9 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
 
     scrollController.addListener(scrollListener);
 
+    // 进入直播间先显示控制器（避免进入后控制条默认隐藏、需移动鼠标才出现）
+    showControls();
+
     super.onInit();
   }
 
