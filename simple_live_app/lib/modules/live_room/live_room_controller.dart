@@ -736,6 +736,7 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   /// 桌面端亮度快捷键调整（Shift+上/下方向键，每次调整 0.05）
   Timer? _brightnessTipTimer;
   DateTime? _lastBrightnessAdjustTime;
+  bool _brightnessAdjusting = false;
   static const _brightnessAdjustDelta = 0.05;
   
   Future<void> adjustBrightness(int direction) async {
@@ -746,11 +747,17 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
         now.difference(_lastBrightnessAdjustTime!) < _volumeAdjustMinInterval) {
       return;
     }
+    // 亮度读写是异步的系统调用，长按重复时若上一次尚未返回，
+    // 会读到过期的当前值导致亮度来回跳动，故串行化。
+    if (_brightnessAdjusting) {
+      return;
+    }
     _lastBrightnessAdjustTime = now;
 
     if (lockControlsState.value && fullScreenState.value) {
       return;
     }
+    _brightnessAdjusting = true;
     try {
       final current = await ScreenBrightness.instance.application;
       final target =
@@ -768,6 +775,8 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
       });
     } catch (e) {
       Log.logPrint(e);
+    } finally {
+      _brightnessAdjusting = false;
     }
   }
 

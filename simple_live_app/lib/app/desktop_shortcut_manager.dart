@@ -77,13 +77,19 @@ class DesktopShortcutManager {
 
   /// 全局键盘 handler。返回 true 表示该事件已处理并阻止继续传播。
   bool _onKeyEvent(KeyEvent event) {
-    // 仅处理按键按下；长按重复交由分发方按动作类型决定是否忽略
-    if (event is! KeyDownEvent) {
+    // 仅处理按下与长按重复；抬起事件放行。
+    // 注意 KeyRepeatEvent 并非 KeyDownEvent 的子类（二者都直接继承 KeyEvent），
+    // 必须单独放行，否则长按只会触发一次，音量/亮度无法连续调节。
+    // 长按重复交由分发方按动作类型决定是否忽略。
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return false;
     }
 
-    // 录制模式优先：捕获下一个非修饰键
+    // 录制模式优先：捕获下一个非修饰键（长按重复不重复捕获）
     if (_recording) {
+      if (event is KeyRepeatEvent) {
+        return true;
+      }
       return _handleRecording(event);
     }
 
