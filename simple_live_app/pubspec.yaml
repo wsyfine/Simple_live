@@ -92,6 +92,11 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
+# 本地修改版第三方包（见各包内注释）
+dependency_overrides:
+  permission_handler_windows:
+    path: third_party/permission_handler_windows #移除位置权限订阅
+
 flutter_launcher_icons:
   android: true
   ios: true

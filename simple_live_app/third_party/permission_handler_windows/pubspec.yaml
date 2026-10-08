@@ -1,0 +1,29 @@
+name: permission_handler_windows
+description: Permission plugin for Flutter. This plugin provides the Windows API to request and check permissions.
+# 本地修改版：移除了构造函数中对 WinRT Geolocator.PositionChanged 的订阅。
+# 该订阅回调为空，但订阅行为本身会让 Windows 记录本应用正在「使用位置」
+# （ConsentStore\location\NonPackaged 下 LastUsedTimeStop 全程为 0）。
+# 详见 windows/permission_handler_windows_plugin.cpp。
+version: 0.2.2
+homepage: https://github.com/baseflow/flutter-permission-handler
+
+flutter:
+  plugin:
+    implements: permission_handler
+    platforms:
+      windows:
+        pluginClass: PermissionHandlerWindowsPlugin
+
+dependencies:
+  flutter:
+    sdk: flutter
+  permission_handler_platform_interface: ^4.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  plugin_platform_interface: ^2.0.0
+
+environment:
+  sdk: ^3.6.0
+  flutter: ">=3.24.0"

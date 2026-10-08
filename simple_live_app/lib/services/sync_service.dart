@@ -151,14 +151,21 @@ class SyncService extends GetxService {
   }
 
   /// 读取本地IP
-  /// - 如果是wifi，直接获取wifi的IP
-  /// - 如果是有线，获取所有的IP，找到全部的IP
+  /// - 非 Windows：优先用 wifi 的 IP，失败则枚举所有网卡
+  /// - Windows：直接枚举所有网卡（避免触发位置访问，见下方注释）
   Future<String> getLocalIP() async {
     String? ip = "";
-    try {
-      ip = await networkInfo.getWifiIP();
-    } catch (e) {
-      Log.logPrint(e);
+    // Windows 上跳过 network_info_plus：其 getWifiIP() 内部会调用
+    // WlanQueryInterface(wlan_intf_opcode_current_connection)，该调用会被
+    // Windows 记为一次「位置访问」，使本应用出现在「隐私和安全性 → 位置」
+    // 的使用记录里。下面的 NetworkInterface.list() 同样能拿到 WLAN 的 IPv4
+    // 地址（且顺带覆盖有线网卡），故 Windows 直接走它。
+    if (!Platform.isWindows) {
+      try {
+        ip = await networkInfo.getWifiIP();
+      } catch (e) {
+        Log.logPrint(e);
+      }
     }
     try {
       if (ip == null || ip.isEmpty) {
