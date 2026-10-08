@@ -725,6 +725,12 @@ class PlayerController extends BaseController
   int _playbackStallRecoveryAttempts = 0;
   bool _playbackStallRecoveryInFlight = false;
 
+  /// 窗口隐藏到托盘 / 最小化期间是否已挂起播放（此时 mpv 已停止，不应再做停滞检测）
+  bool _playbackSuspended = false;
+
+  /// 当前是否处于「挂起播放」状态
+  bool get playbackSuspended => _playbackSuspended;
+
   static const _playbackStallSampleInterval = Duration(seconds: 3);
   static const _playbackStallTimeout = Duration(seconds: 15);
   static const _playbackBufferingStallTimeout = Duration(seconds: 30);
@@ -919,6 +925,54 @@ class PlayerController extends BaseController
       _playbackStallSampleInterval,
       (_) => _checkPlaybackStall(),
     );
+  }
+
+  /// 挂起播放（窗口隐藏到托盘 / 最小化时调用，停止 mpv 解码与渲染以节省 CPU/GPU）。
+  ///
+  /// 只停播放器与停滞检测，不改动 UI 状态（全屏 / 小窗 / 控制条均保持不变）。
+  /// 恢复播放由子类负责重新拉流（[player.open] 是唯一能重新开始的入口，
+  /// 因为 media_kit 的 `stop()` 会把 `isPlayingStateChangeAllowed` 置为 false）。
+  Future<void> suspendPlayback() async {
+    if (_playbackSuspended) {
+      return;
+    }
+    _playbackSuspended = true;
+    // 停止期间 position 恒为 0、playlist 已清空，watchdog 会误判停滞并触发换线
+    _playbackStallWatchdogTimer?.cancel();
+    _playbackStallWatchdogTimer = null;
+    _resetPlaybackStallSample();
+    try {
+      await player.stop();
+    } catch (e) {
+      Log.logPrint(e);
+    }
+    // 隐藏到托盘 / 最小化后没必要继续阻止息屏
+    try {
+      await WakelockPlus.disable();
+    } catch (e) {
+      Log.logPrint(e);
+    }
+    // 暂停弹幕渲染（动画驱动，隐藏时没有继续跑的必要）
+    try {
+      danmakuController?.pause();
+    } catch (e) {
+      Log.logPrint(e);
+    }
+  }
+
+  /// 从挂起状态恢复（重新开始播放由子类完成，这里只恢复本地状态与停滞检测）
+  void resumePlayback() {
+    if (!_playbackSuspended) {
+      return;
+    }
+    _playbackSuspended = false;
+    _resetPlaybackStallSample();
+    _startPlaybackStallWatchdog();
+    try {
+      danmakuController?.resume();
+    } catch (e) {
+      Log.logPrint(e);
+    }
   }
 
   /// 检查播放是否停滞

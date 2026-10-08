@@ -44,6 +44,12 @@ class TrayService extends GetxService with TrayListener, WindowListener {
 
   bool get _supported => Platform.isWindows;
 
+  /// 是否正在执行「退出应用」流程。
+  ///
+  /// 退出时会先隐藏窗口再销毁，隐藏会触发各处的窗口事件回调；
+  /// 直播间据此跳过后台挂起，避免在引擎析构前再改动播放器状态。
+  bool get isQuitting => _quitting;
+
   Future<TrayService> init() async {
     if (!_supported || _initialized) {
       return this;

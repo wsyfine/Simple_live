@@ -26,6 +26,7 @@ import 'package:simple_live_app/modules/live_room/player/player_controller.dart'
 import 'package:simple_live_app/modules/settings/danmu_settings_page.dart';
 import 'package:simple_live_app/services/db_service.dart';
 import 'package:simple_live_app/services/follow_service.dart';
+import 'package:simple_live_app/services/tray_service.dart';
 import 'package:simple_live_app/widgets/desktop_refresh_button.dart';
 import 'package:simple_live_app/widgets/follow_user_item.dart';
 import 'package:simple_live_core/simple_live_core.dart';
@@ -34,7 +35,8 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:screen_brightness/screen_brightness.dart';
 import 'package:window_manager/window_manager.dart';
 
-class LiveRoomController extends PlayerController with WidgetsBindingObserver {
+class LiveRoomController extends PlayerController
+    with WidgetsBindingObserver, WindowListener {
   final Site pSite;
   final String pRoomId;
   late LiveDanmaku liveDanmaku;
@@ -113,9 +115,36 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   var liveDuration = "00:00:00".obs;
   Timer? _liveDurationTimer;
 
+  /// 是否已注册窗口事件监听（仅桌面端）
+  bool _windowListenerRegistered = false;
+
+  /// 是否是「因窗口隐藏/最小化」而挂起了播放
+  bool _suspendedByWindow = false;
+
+  /// 挂起播放的时间点（用于判断恢复时是否要重新解析推流地址）
+  DateTime? _suspendedAt;
+
+  /// 进行中的挂起动作（[suspendPlayback] 里的 `player.stop()`），
+  /// 恢复时必须先等它结束，否则会和随后的 `player.open()` 竞态。
+  Future<void>? _suspendFuture;
+
+  /// 是否正在退出应用（[exitApp] 会先隐藏窗口，此时不应挂起播放）
+  bool _exiting = false;
+
   @override
   void onInit() {
     WidgetsBinding.instance.addObserver(this);
+    // 桌面端：窗口隐藏到托盘 / 最小化时挂起播放，恢复时重新拉流。
+    // Windows 上隐藏/最小化不会触发 AppLifecycleState.paused，
+    // 所以只能靠 window_manager 的窗口事件。
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      try {
+        windowManager.addListener(this);
+        _windowListenerRegistered = true;
+      } catch (e) {
+        Log.logPrint(e);
+      }
+    }
     if (FollowService.instance.followList.isEmpty) {
       FollowService.instance.loadData();
     }
@@ -139,6 +168,92 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
     if (scrollController.position.userScrollDirection ==
         ScrollDirection.forward) {
       disableAutoScroll.value = true;
+    }
+  }
+
+  // --- 窗口事件：隐藏到托盘 / 最小化时挂起播放，恢复时重新拉流 ---
+
+  /// window_manager 的通用事件回调（`minimize` / `restore` / `hide` / `show` 等）。
+  ///
+  /// 注意：window_manager 会先调 [onWindowEvent]，再调对应的专用回调，
+  /// 这里统一处理，避免两处重复触发。
+  @override
+  void onWindowEvent(String eventName) {
+    switch (eventName) {
+      case "minimize":
+      case "hide":
+        suspendByWindow();
+        break;
+      case "restore":
+      case "show":
+        resumeFromWindow();
+        break;
+    }
+    super.onWindowEvent(eventName);
+  }
+
+  /// 窗口不可见（隐藏到托盘）或最小化：停掉播放器释放 CPU/GPU
+  void suspendByWindow() {
+    if (_suspendedByWindow) {
+      return;
+    }
+    if (!liveStatus.value || playUrls.isEmpty) {
+      return;
+    }
+    // 退出应用的过程中（托盘退出 / 自动关闭倒计时）会先 hide 窗口再 destroy，
+    // 此时再 stop 播放器只会在引擎析构时引入竞态，直接跳过。
+    if (_exiting) {
+      return;
+    }
+    if (Get.isRegistered<TrayService>() && TrayService.instance.isQuitting) {
+      return;
+    }
+    // 录屏走独立的拉流链路（不会被 player.stop 中断），挂起播放器省不下
+    // 多少开销，反而会让「正在录制」的状态变得难以解释，因此录制期间不挂起。
+    if (isRecording.value) {
+      return;
+    }
+    _suspendedByWindow = true;
+    _suspendedAt = DateTime.now();
+    isBackground = true;
+    Log.d("窗口隐藏/最小化，挂起播放");
+    _suspendFuture = suspendPlayback();
+  }
+
+  /// 窗口重新可见 / 从最小化恢复：重新拉流继续播放
+  Future<void> resumeFromWindow() async {
+    if (!_suspendedByWindow) {
+      return;
+    }
+    _suspendedByWindow = false;
+    isBackground = false;
+    // 等挂起动作（player.stop）真正完成，避免与随后的 open 竞态
+    final pending = _suspendFuture;
+    _suspendFuture = null;
+    if (pending != null) {
+      try {
+        await pending;
+      } catch (e) {
+        Log.logPrint(e);
+      }
+    }
+    if (isClosed) {
+      return;
+    }
+    Log.d("窗口恢复，重新拉流");
+    resumePlayback();
+    if (!liveStatus.value || playUrls.isEmpty) {
+      return;
+    }
+    // 挂起超过 30 秒的推流地址可能已过期，重新解析更保险
+    final suspendedFor = _suspendedAt == null
+        ? Duration.zero
+        : DateTime.now().difference(_suspendedAt!);
+    _suspendedAt = null;
+    if (suspendedFor > const Duration(seconds: 30)) {
+      getPlayUrl();
+    } else {
+      initPlaylist();
     }
   }
 
@@ -192,6 +307,9 @@ class LiveRoomController extends PlayerController with WidgetsBindingObserver {
   /// exit(0) 进程级终止触发 Windows hard error；
   /// 其他平台保持原有行为。
   Future<void> exitApp() async {
+    // 退出流程也会先隐藏窗口，标记后不再触发「挂起播放」，
+    // 避免在引擎析构前再改动播放器状态。
+    _exiting = true;
     if (Platform.isWindows || Platform.isMacOS) {
       try {
         // 先隐藏窗口再销毁。destroy 只是投递退出消息，窗口要等引擎与
@@ -1558,6 +1676,14 @@ $stackTrace''');
     DesktopShortcutManager.instance.onShortcutKey = null;
     DesktopShortcutManager.instance.exitLiveRoomScope();
     WidgetsBinding.instance.removeObserver(this);
+    if (_windowListenerRegistered) {
+      _windowListenerRegistered = false;
+      try {
+        windowManager.removeListener(this);
+      } catch (e) {
+        Log.logPrint(e);
+      }
+    }
     scrollController.removeListener(scrollListener);
     autoExitTimer?.cancel();
 
