@@ -8,7 +8,6 @@ import 'package:simple_live_app/app/log.dart';
 import 'package:simple_live_app/app/utils.dart';
 import 'package:simple_live_app/routes/route_path.dart';
 import 'package:simple_live_app/services/signalr_service.dart';
-import 'package:url_launcher/url_launcher_string.dart';
 
 class MinePage extends StatelessWidget {
   const MinePage({Key? key}) : super(key: key);
@@ -223,39 +222,6 @@ class MinePage extends StatelessWidget {
                       Log.logPrint(room);
                     },
                   ),
-              ],
-            ),
-            Divider(
-              indent: 12,
-              endIndent: 12,
-              color: Colors.grey.withAlpha(25),
-            ),
-            _buildCard(
-              context,
-              children: [
-                const ListTile(
-                  leading: Icon(Remix.error_warning_line),
-                  title: Text("免责声明"),
-                  trailing: Icon(
-                    Icons.chevron_right,
-                    color: Colors.grey,
-                  ),
-                  onTap: Utils.showStatement,
-                ),
-                ListTile(
-                  leading: const Icon(Remix.github_line),
-                  title: const Text("开源主页"),
-                  trailing: const Icon(
-                    Icons.chevron_right,
-                    color: Colors.grey,
-                  ),
-                  onTap: () {
-                    launchUrlString(
-                      "https://github.com/xiaoyaocz/dart_simple_live",
-                      mode: LaunchMode.externalApplication,
-                    );
-                  },
-                ),
               ],
             ),
           ],
